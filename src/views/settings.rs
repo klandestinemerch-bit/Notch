@@ -35,9 +35,9 @@ pub(super) const PAGES: &[Page] = &[
     Page { id: "music", name: "Music", icon: "MusicNote", caption: Some("TOOLS"), draw: pages::music },
     Page { id: "calendar", name: "Calendar", icon: "CalendarDays", caption: None, draw: pages::calendar },
     Page { id: "prayer", name: "Prayer", icon: "Moon", caption: None, draw: pages::prayer },
+    Page { id: "weather", name: "Weather", icon: "Cloud", caption: None, draw: pages::weather },
     Page { id: "todos", name: "To-Dos", icon: "ListBullet", caption: None, draw: pages::todos },
     Page { id: "data", name: "Data", icon: "ClipboardList", caption: None, draw: pages::data },
-    Page { id: "about", name: "About", icon: "Info", caption: Some(""), draw: pages::about },
 ];
 
 /// Results that background jobs (geocoding, TickTick, calendar sync, app lists) leave for the page.
@@ -45,6 +45,10 @@ pub(super) const PAGES: &[Page] = &[
 pub(super) struct Shared {
     pub prayer_status: String,
     pub prayer_busy: bool,
+    /// Settings → Weather: places found for the typed name, a search running, a message.
+    pub weather_results: Option<Vec<crate::services::weather::Place>>,
+    pub weather_busy: bool,
+    pub weather_status: String,
     pub feed_status: String,
     pub feed_busy: bool,
     /// Subscribed calendar links (decrypted), read off the UI thread.
@@ -639,41 +643,6 @@ impl Pg<'_, '_> {
             }
             out.push(Some(Rect::new(self.x + self.w - pad - r.cw, y + 11.0 + (l.inner - r.ch) / 2.0, r.cw, r.ch)));
             y += l.h;
-        }
-        self.y = card.bottom();
-        out
-    }
-
-    /// Details card rows (About): label on the left, value right-aligned before an optional control; min 42 tall.
-    /// Returns each row's control rectangle (`cw` wide).
-    pub fn info_card(&mut self, caption: &str, rows: &[(&str, String, f32)]) -> Vec<Rect> {
-        if !self.free() {
-            return vec![Rect::default(); rows.len()];
-        }
-        self.caption(caption);
-        let t = self.ui.t;
-        let pad = 16.0;
-        let row_h = 42.0;
-        let rows: Vec<(&str, &String, &f32)> = rows.iter().map(|(l, v, w)| (tr(l), v, w)).collect();
-        let h = 4.0 + rows.len() as f32 * row_h + (rows.len().saturating_sub(1)) as f32;
-        let card = Rect::new(self.x, self.y, self.w, h);
-        self.ui.fill(card, 16.0, t.surface);
-        let mut y = card.y + 2.0;
-        let mut out = Vec::new();
-        for (i, &(label, value, cw)) in rows.iter().enumerate() {
-            if i > 0 {
-                self.ui.fill(Rect::new(card.x + pad, y, card.w - 2.0 * pad, 1.0), 0.0, t.stroke);
-                y += 1.0;
-            }
-            let row = Rect::new(card.x + pad, y, card.w - 2.0 * pad, row_h);
-            let lw = self.ui.measure(label, 13.0, SEMIBOLD).ceil() + 12.0;
-            self.ui.text(label, Rect::new(row.x, row.y, lw, row.h), 13.0, SEMIBOLD, t.text, Align::Left);
-            let ctrl = Rect::new(row.right() - cw, row.cy() - CTRL_H / 2.0, *cw, CTRL_H);
-            let vr = row.x + lw;
-            let vend = if *cw > 0.0 { ctrl.x - 12.0 } else { row.right() };
-            self.ui.text(value, Rect::new(vr, row.y, (vend - vr).max(0.0), row.h), 12.0, REGULAR, t.subtext, Align::Right);
-            out.push(ctrl);
-            y += row_h;
         }
         self.y = card.bottom();
         out

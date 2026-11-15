@@ -2,15 +2,15 @@
 //! Same settings, wording and choices as the .NET build's Settings.
 
 use crate::bg;
-use crate::gfx::{color, mix, with_alpha, Align, BOLD, MEDIUM, REGULAR, SEMIBOLD};
+use crate::gfx::{color, mix, with_alpha, Align, MEDIUM, REGULAR, SEMIBOLD};
 use crate::i18n::tr;
 use crate::model;
-use crate::services::{calendar, cliphistory, phone, prayer, settings, store, ticktick};
+use crate::services::{calendar, cliphistory, phone, prayer, settings, ticktick};
 use crate::theme::{self, ACCENTS, SCHEMES};
 use crate::tools;
 use crate::ui::{id, Rect};
 
-use super::{button, button_w, lh, small_icon, switch, wrap_lines, Pg, R, CTRL_H};
+use super::{button, button_w, lh, small_icon, switch, Pg, R, CTRL_H};
 
 const SOUNDS: [&str; 4] = ["Calendar", "Chime", "Bell", "No Sound"];
 
@@ -217,9 +217,6 @@ pub fn appearance(p: &mut Pg) {
             p.ui.g.fill_circle(kx, r.cy(), 7.5, p.ui.c(with_alpha(t.text, 0.35)));
         }
     }
-
-    let rr = p.card(Some(tr("UNITS")), &[R::t(tr("Fahrenheit & mph"), tr("Weather units."))]);
-    p.tog(rr[0], s.use_fahrenheit, |x, v| x.use_fahrenheit = v);
 }
 
 /// Solid / Translucent: the notch as a pill over a bit of "wallpaper", with the name below (157 wide).
@@ -1113,6 +1110,83 @@ fn adzan(p: &mut Pg, s: &settings::Settings) {
     }
 }
 
+// ---------------------------------------------------------------- Weather
+
+/// The place the weather is for (search, then pick the right one: towns share names) and its units.
+pub fn weather(p: &mut Pg) {
+    use crate::services::weather;
+    let s = p.st.clone();
+    p.title("Weather", "Which place the weather is for, and its units.");
+    let (results, busy, status) = {
+        let sh = p.s.shared.lock().unwrap();
+        (sh.weather_results.clone(), sh.weather_busy, sh.weather_status.clone())
+    };
+    let now = if s.weather_city.trim().is_empty() {
+        tr("Not set yet.").to_string()
+    } else {
+        crate::i18n::tf!("Now: {}", "Sekarang: {}", s.weather_city.trim())
+    };
+    let foot = if busy {
+        tr("Searching…").to_string()
+    } else if !status.is_empty() {
+        status
+    } else {
+        now
+    };
+    let rr = p.card(
+        Some("LOCATION"),
+        &[R::c("City or area", "Type a city or district and press Enter, then pick the right one from the list.", 220.0).foot(foot)],
+    );
+    if let Some(r) = rr[0] {
+        if let Some(q) = p.input("settings.weathercity", r, "e.g. Bekasi") {
+            let sh = p.shared();
+            {
+                let mut g = sh.lock().unwrap();
+                g.weather_busy = true;
+                g.weather_status.clear();
+                g.weather_results = None;
+            }
+            bg::spawn(move || {
+                let found = weather::search(&q);
+                let mut g = sh.lock().unwrap();
+                g.weather_busy = false;
+                match found {
+                    Some(list) if !list.is_empty() => g.weather_results = Some(list),
+                    Some(_) => g.weather_status = tr("No place found. Check the spelling or your connection.").to_string(),
+                    None => g.weather_status = tr("Couldn't search. Check your connection.").to_string(),
+                }
+            });
+        }
+    }
+
+    // The places found: pick one.
+    if let Some(list) = results.filter(|l| !l.is_empty()) {
+        let choose_w = p.button_w("Choose");
+        let rows: Vec<R> = list.iter().map(|pl| R::c(pl.name.clone(), pl.area.clone(), choose_w)).collect();
+        let rr = p.card(Some("PICK THE PLACE"), &rows);
+        for (pl, at) in list.iter().zip(rr) {
+            if p.button(at, "Choose", true) {
+                let (label, lat, lon) = (pl.label(), pl.lat, pl.lon);
+                settings::update(|x| {
+                    x.weather_city = label;
+                    x.weather_lat = Some(lat);
+                    x.weather_lon = Some(lon);
+                });
+                weather::invalidate();
+                model::weather_changed();
+                p.s.shared.lock().unwrap().weather_results = None;
+                p.ui.set_field_text(id("settings.weathercity"), "");
+            }
+        }
+    }
+
+    let rr = p.card(Some("UNITS"), &[R::c("Units", "Temperature and wind speed.", 170.0)]);
+    if p.pick(rr[0], "set.units", &["Celsius · km/h", "Fahrenheit · mph"], &[false, true], &s.use_fahrenheit, 0, |x, v| x.use_fahrenheit = v) {
+        weather::invalidate();
+        model::weather_changed();
+    }
+}
+
 // ---------------------------------------------------------------- To-dos
 
 pub fn todos(p: &mut Pg) {
@@ -1324,164 +1398,6 @@ fn pick_folder(title: &str, start: &str) -> Option<String> {
     .join()
     .ok()
     .flatten()
-}
-
-// ---------------------------------------------------------------- About
-
-pub fn about(p: &mut Pg) {
-    let version = env!("CARGO_PKG_VERSION");
-    p.title(tr("About"), tr("Version, privacy and where your data lives."));
-    if !p.free() {
-        return;
-    }
-    let t = p.ui.t;
-
-    // Hero: logo tile, wordmark, tagline, chips, update button (18 padding, 18 radius, 16 above).
-    p.y += 16.0;
-    let tag = tr("Your screen, smarter — a dynamic-island toolbox for Windows.");
-    let info_x = p.x + 18.0 + 72.0 + 16.0;
-    let info_w = p.x + p.w - 18.0 - info_x;
-    let tag_lines = wrap_lines(p.ui, tag, 12.0, REGULAR, info_w);
-    let info_h = lh(22.0) + 2.0 + tag_lines.len() as f32 * lh(12.0) + 9.0 + (lh(11.0) + 6.0) + 4.0 + 8.0 + 4.0 + CTRL_H;
-    let hero = Rect::new(p.x, p.y, p.w, 36.0 + info_h.max(72.0));
-    p.ui.fill(hero, 18.0, t.surface);
-    let tile = Rect::new(hero.x + 18.0, hero.y + 18.0, 72.0, 72.0);
-    p.ui.fill(tile, 18.0, t.pill);
-    p.ui.g.stroke_round(tile.inset(0.5, 0.5).d2d(), 17.5, p.ui.c(t.stroke), 1.0);
-    brand_mark(p, tile.cx(), tile.cy(), 46.0);
-    let mut y = hero.y + 18.0 + (info_h.max(72.0) - info_h) / 2.0;
-    let fw = p.ui.measure("Fath", 22.0, BOLD);
-    p.ui.text("Fath", Rect::new(info_x, y, fw + 2.0, lh(22.0)), 22.0, BOLD, t.text, Align::Left);
-    p.ui.text("Notch", Rect::new(info_x + fw, y, 120.0, lh(22.0)), 22.0, BOLD, t.accent, Align::Left);
-    y += lh(22.0) + 2.0;
-    for l in &tag_lines {
-        p.ui.text(l, Rect::new(info_x, y, info_w, lh(12.0)), 12.0, REGULAR, t.subtext, Align::Left);
-        y += lh(12.0);
-    }
-    y += 9.0;
-    let mut cx = info_x;
-    for (i, chip) in [crate::i18n::tf!("Version {version}", "Versi {version}"), tr("Windows · x64").to_string(), tr("Rust").to_string()].iter().enumerate() {
-        let w = p.ui.measure(chip, 11.0, SEMIBOLD).ceil() + 18.0;
-        let r = Rect::new(cx, y, w, lh(11.0) + 6.0);
-        p.ui.fill(r, 9.0, if i == 0 { t.accent_soft } else { t.surface2 });
-        p.ui.text(chip, r, 11.0, SEMIBOLD, if i == 0 { t.accent } else { t.subtext }, Align::Center);
-        cx += w + 6.0;
-    }
-    y += lh(11.0) + 6.0 + 4.0 + 8.0 + 4.0;
-    // No update feed in this build: the .NET build shows the button disabled with this text.
-    let label = tr("No update feed yet");
-    let w = p.ui.measure(label, 13.0, MEDIUM).ceil() + 28.0 + 19.0;
-    let b = Rect::new(info_x, y, w, CTRL_H);
-    p.ui.fill(b, 8.0, with_alpha(t.surface2, 0.35));
-    p.ui.icon("Info", b.x + 14.0 + 6.5, b.cy(), 13.0, with_alpha(t.text, 0.35));
-    p.ui.text(label, Rect::new(b.x + 14.0 + 19.0, b.y, w - 33.0, b.h), 13.0, MEDIUM, with_alpha(t.text, 0.35), Align::Left);
-    p.y = hero.bottom();
-
-    let open_w = p.button_w(tr("Open"));
-    let log = p.s.shared.lock().unwrap().log_exists;
-    let mut rows: Vec<(&str, String, f32)> = vec![
-        (tr("Version"), version.to_string(), 0.0),
-        (tr("Runtime"), tr("Rust · native Windows build").to_string(), 0.0),
-        (tr("System"), p.s.facts.windows.clone(), 0.0),
-        (tr("Data folder"), tr("Settings, notes, history and keys").to_string(), open_w),
-    ];
-    if log {
-        rows.push((tr("Error log"), tr("Useful when reporting an issue").to_string(), open_w));
-    }
-    let ctl = p.info_card(tr("DETAILS"), &rows);
-    if button(p.ui, ctl[3], tr("Open"), false, true) {
-        crate::shell::open(&store::root().to_string_lossy());
-    }
-    if log && button(p.ui, ctl[4], tr("Open"), false, true) {
-        crate::shell::open(&store::path("error.log").to_string_lossy());
-    }
-
-    // Privacy.
-    p.caption(tr("PRIVACY"));
-    let items = [
-        ("Cloud", tr("Weather"), tr("Open-Meteo — the city you search")),
-        ("MusicNote", tr("Lyrics"), tr("LRCLIB — the title and artist playing")),
-        ("Moon", tr("Prayer times"), tr("Open-Meteo — your prayer city, looked up once; times are computed on this PC")),
-    ];
-    let intro = tr("Everything stays on this PC. These tools go online only while you use them:");
-    let outro = tr("API keys are encrypted with Windows DPAPI and only ever sent to their own provider.");
-    let tw = p.w - 32.0;
-    let intro_lines = wrap_lines(p.ui, intro, 12.0, REGULAR, tw);
-    let outro_lines = wrap_lines(p.ui, outro, 11.0, REGULAR, tw);
-    let what_w = tw - 34.0 - 84.0;
-    let what_lines: Vec<Vec<String>> = items.iter().map(|(_, _, w)| wrap_lines(p.ui, w, 12.0, REGULAR, what_w)).collect();
-    let rows_h: f32 = what_lines.iter().map(|l| 6.0 + (l.len() as f32 * lh(12.0)).max(24.0)).sum();
-    let h = 2.0 + 12.0 + intro_lines.len() as f32 * lh(12.0) + 8.0 + rows_h + 8.0 + outro_lines.len() as f32 * lh(11.0) + 12.0 + 2.0;
-    let card = Rect::new(p.x, p.y, p.w, h);
-    p.ui.fill(card, 16.0, t.surface);
-    let x0 = card.x + 16.0;
-    let mut y = card.y + 14.0;
-    for l in &intro_lines {
-        p.ui.text(l, Rect::new(x0, y, tw, lh(12.0)), 12.0, REGULAR, t.text, Align::Left);
-        y += lh(12.0);
-    }
-    y += 8.0;
-    for ((icon, name, _), lines) in items.iter().zip(&what_lines) {
-        let rh = (lines.len() as f32 * lh(12.0)).max(24.0);
-        let row_y = y + 3.0;
-        let tile = Rect::new(x0, row_y + (rh - 24.0) / 2.0, 24.0, 24.0);
-        p.ui.fill(tile, 7.0, t.accent_soft);
-        p.ui.icon(icon, tile.cx(), tile.cy(), 12.0, t.accent);
-        p.ui.text(name, Rect::new(x0 + 34.0, row_y, 84.0, rh), 12.0, SEMIBOLD, t.text, Align::Left);
-        let mut ly = row_y + (rh - lines.len() as f32 * lh(12.0)) / 2.0;
-        for l in lines {
-            p.ui.text(l, Rect::new(x0 + 34.0 + 84.0, ly, what_w, lh(12.0)), 12.0, REGULAR, t.subtext, Align::Left);
-            ly += lh(12.0);
-        }
-        y += rh + 6.0;
-    }
-    y += 8.0;
-    for l in &outro_lines {
-        p.ui.text(l, Rect::new(x0, y, tw, lh(11.0)), 11.0, REGULAR, t.subtext, Align::Left);
-        y += lh(11.0);
-    }
-    p.y = card.bottom();
-
-    let _ = p.info_card(
-        tr("CREDITS"),
-        &[(tr("Heroicons"), tr("Interface icons · MIT").to_string(), 0.0), (tr("Open-Meteo · LRCLIB"), tr("Free weather and lyrics data").to_string(), 0.0)],
-    );
-
-    // Footer: copyright on the left, quit on the right.
-    p.y += 18.0;
-    let n = crate::notch::now();
-    let qw = p.button_w(tr("Quit FathNotch"));
-    let q = Rect::new(p.x + p.w - qw, p.y, qw, CTRL_H);
-    p.ui.text(&format!("© {} FathNotch", n.year), Rect::new(p.x + 4.0, p.y, 200.0, CTRL_H), 11.0, REGULAR, t.subtext, Align::Left);
-    let hov = p.ui.hovered(q);
-    p.ui.fill(q, 8.0, with_alpha(t.surface2, if hov { 0.85 } else { 1.0 }));
-    p.ui.text(tr("Quit FathNotch"), q, 13.0, MEDIUM, t.danger, Align::Center);
-    if p.ui.clicked(q) {
-        unsafe { windows::Win32::UI::WindowsAndMessaging::PostQuitMessage(0) };
-    }
-    p.y += CTRL_H + 4.0;
-}
-
-/// The FathNotch cat (as in the tray icon), white, `size` wide, centred on (cx, cy).
-fn brand_mark(p: &mut Pg, cx: f32, cy: f32, size: f32) {
-    let s = size;
-    let (x0, y0) = (cx - s / 2.0, cy - s / 2.0);
-    let white = p.ui.c(color(0xFFFFFF, 1.0));
-    if let Some(geo) = p.ui.g.path(|sink| unsafe {
-        use windows::Win32::Graphics::Direct2D::Common::{D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED};
-        for (a, b, c) in [((0.22, 0.42), (0.27, 0.14), (0.48, 0.30)), ((0.78, 0.42), (0.73, 0.14), (0.52, 0.30))] {
-            sink.BeginFigure(crate::gfx::pt(x0 + a.0 * s, y0 + a.1 * s), D2D1_FIGURE_BEGIN_FILLED);
-            sink.AddLine(crate::gfx::pt(x0 + b.0 * s, y0 + b.1 * s));
-            sink.AddLine(crate::gfx::pt(x0 + c.0 * s, y0 + c.1 * s));
-            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
-        }
-    }) {
-        p.ui.g.fill_geometry(&geo.into(), white);
-    }
-    p.ui.g.fill_circle(x0 + s * 0.5, y0 + s * 0.56, s * 0.30, white);
-    let eye = p.ui.c(p.ui.t.pill);
-    p.ui.g.fill_circle(x0 + s * 0.39, y0 + s * 0.55, s * 0.055, eye);
-    p.ui.g.fill_circle(x0 + s * 0.61, y0 + s * 0.55, s * 0.055, eye);
 }
 
 /// "Windows 11 · build 26200" (build 22000 and later is Windows 11). Read once.

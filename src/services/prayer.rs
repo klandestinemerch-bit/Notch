@@ -132,6 +132,10 @@ pub fn geocode(city: &str) -> Option<(f64, f64, String)> {
     if city.is_empty() {
         return None;
     }
+    // The weather place picked in Settings → Weather (the prayer city falls back to it).
+    if let Some(p) = super::weather::picked(city) {
+        return Some(p);
+    }
     let url = format!("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name={}", crate::http::escape(city));
     let v = super::weather::get_json(&url)?;
     let place = v.get("results")?.get(0)?;

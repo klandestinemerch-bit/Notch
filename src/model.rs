@@ -413,6 +413,13 @@ pub fn timer_text() -> Option<(String, String)> {
     Some((crate::i18n::tr(t.label()).to_string(), t.text()))
 }
 
+/// The weather place or units changed: fetch again on the next tick.
+pub fn weather_changed() {
+    let mut m = model();
+    m.weather_at = None;
+    m.weather = None;
+}
+
 pub fn weather_now() -> Option<weather::Current> {
     model().weather.clone()
 }

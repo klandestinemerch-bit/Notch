@@ -73,6 +73,10 @@ pub struct Settings {
     pub phone_port: i32,
 
     pub weather_city: String,
+    /// Where `weather_city` is, when it was picked from Settings → Weather's search (so a town that shares
+    /// its name with others stays the one chosen). None: look the name up.
+    pub weather_lat: Option<f64>,
+    pub weather_lon: Option<f64>,
     pub use_fahrenheit: bool,
 
     pub pomodoro_work_min: i32,
@@ -228,6 +232,8 @@ impl Default for Settings {
             phone_height: 220.0,
             phone_port: 0,
             weather_city: s("London"),
+            weather_lat: None,
+            weather_lon: None,
             use_fahrenheit: false,
             pomodoro_work_min: 25,
             pomodoro_break_min: 5,

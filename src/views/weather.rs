@@ -107,7 +107,11 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     if let Some(city) = ui.text_field(id(FIELD), field.pad(36.0, 0.0, 10.0, 0.0), tr("City"), 13.0) {
         ui.set_field_text(id(FIELD), &city);
         ui.st.focus = 0;
-        settings::update_quiet(|x| x.weather_city = city);
+        settings::update_quiet(|x| {
+            x.weather_city = city;
+            x.weather_lat = None;
+            x.weather_lon = None;
+        });
         load(s, true);
     }
     let (status, loading, fc) = {

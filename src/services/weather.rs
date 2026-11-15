@@ -97,12 +97,74 @@ pub fn forecast(city: &str, fahrenheit: bool) -> Option<(Current, Vec<Hour>, Vec
     }
 }
 
-/// Drops cached readings so the next call fetches (the Weather tab's refresh button).
+/// Drops cached readings so the next call fetches (the Weather tab's refresh button; a new place).
 pub fn invalidate() {
     with_cache(|c| {
         c.current.clear();
         c.forecast.clear();
+        c.places.clear();
     });
+}
+
+/// The coordinates picked in Settings → Weather, when `city` is still the place they were picked for.
+pub fn picked(city: &str) -> Option<(f64, f64, String)> {
+    let s = super::settings::shared();
+    let same = !city.trim().is_empty() && city.trim().eq_ignore_ascii_case(s.weather_city.trim());
+    match (same, s.weather_lat, s.weather_lon) {
+        (true, Some(lat), Some(lon)) => Some((lat, lon, s.weather_city.trim().to_string())),
+        _ => None,
+    }
+}
+
+/// A search result (Settings → Weather).
+#[derive(Clone, Debug)]
+pub struct Place {
+    pub name: String,
+    /// "Jawa Barat, Indonesia"
+    pub area: String,
+    pub lat: f64,
+    pub lon: f64,
+}
+
+impl Place {
+    /// "Bekasi, Jawa Barat, Indonesia": what's saved as the weather city.
+    pub fn label(&self) -> String {
+        if self.area.is_empty() { self.name.clone() } else { format!("{}, {}", self.name, self.area) }
+    }
+}
+
+/// Places matching `query` (up to 8, names in the interface language). None when offline.
+pub fn search(query: &str) -> Option<Vec<Place>> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Some(Vec::new());
+    }
+    let lang = if crate::i18n::is_id() { "id" } else { "en" };
+    let url = format!("https://geocoding-api.open-meteo.com/v1/search?count=8&language={lang}&name={}", crate::http::escape(q));
+    Some(places(&get_json(&url)?))
+}
+
+/// The geocoding answer's results as places.
+fn places(v: &Value) -> Vec<Place> {
+    let Some(list) = v.get("results").and_then(Value::as_array) else { return Vec::new() };
+    let text = |r: &Value, k: &str| r.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    list.iter()
+            .filter_map(|r| {
+                let name = text(r, "name");
+                let mut parts: Vec<String> = Vec::new();
+                for k in ["admin2", "admin1", "country"] {
+                    let p = text(r, k);
+                    if !p.is_empty() && p != name && !parts.contains(&p) {
+                        parts.push(p);
+                    }
+                }
+                // The district (admin2) only where it adds something: "Bekasi, Jawa Barat" not "Bekasi, Bekasi".
+                if parts.len() > 2 {
+                    parts.remove(0);
+                }
+            Some(Place { name, area: parts.join(", "), lat: r.get("latitude")?.as_f64()?, lon: r.get("longitude")?.as_f64()? })
+        })
+        .collect()
 }
 
 /// (lat, lon, "Name, Country"), remembered for the session.
@@ -110,6 +172,9 @@ fn place(city: &str) -> Option<(f64, f64, String)> {
     let k = city.trim().to_lowercase();
     if k.is_empty() {
         return None;
+    }
+    if let Some(p) = picked(city) {
+        return Some(p);
     }
     if let Some(p) = with_cache(|c| c.places.get(&k).cloned()) {
         return Some(p);
@@ -238,6 +303,30 @@ pub fn icon_kind(code: u32, is_day: bool) -> &'static str {
 /// "31°"
 pub fn degrees(v: f64) -> String {
     format!("{}°", v.round() as i64)
+}
+
+#[cfg(test)]
+mod place_tests {
+    use super::*;
+
+    #[test]
+    fn search_results_name_the_region() {
+        let v: Value = serde_json::from_str(
+            r#"{"results":[
+                {"name":"Bekasi","latitude":-6.2349,"longitude":106.9896,"country":"Indonesia","admin1":"Jawa Barat","admin2":"Kota Bekasi"},
+                {"name":"Bekasi","latitude":-6.25,"longitude":107.15,"country":"Indonesia","admin1":"Jawa Barat","admin2":"Bekasi"},
+                {"name":"Singapore","latitude":1.29,"longitude":103.85,"country":"Singapore"},
+                {"name":"no coordinates","country":"X"}
+            ]}"#,
+        )
+        .unwrap();
+        let p = places(&v);
+        assert_eq!(p.len(), 3, "results without coordinates are dropped");
+        assert_eq!(p[0].label(), "Bekasi, Jawa Barat, Indonesia");
+        assert_eq!(p[1].area, "Jawa Barat, Indonesia", "the district only when it differs from the name");
+        assert_eq!(p[2].label(), "Singapore", "a city-state is just its name");
+        assert!(places(&serde_json::json!({})).is_empty());
+    }
 }
 
 #[cfg(test)]
