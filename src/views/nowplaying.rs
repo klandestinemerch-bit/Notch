@@ -2,18 +2,26 @@
 //! toggle and previous / play-pause / next. With Lyrics on and synced lyrics found, the card splits in two:
 //! a smaller player on the left, the lyrics on the right with the sung line lit and glided to the middle
 //! (click a line to jump there).
+//!
+//! Music files on this PC (`services::player`): + opens songs (Play does too while nothing is playing and
+//! the queue is empty), and songs or folders dropped on this tool join the queue. The queue button splits
+//! the card the same way with the queue on the right: click a song to play it, × to take it out; shuffle,
+//! repeat, add a folder and clear (click twice) sit above it.
 
 use std::sync::{Arc, Mutex};
 
 use crate::gfx::{with_alpha, Align, BOLD, REGULAR, SEMIBOLD};
 use crate::model;
+use crate::services::player::{self, Repeat};
 use crate::services::{lyrics, media, settings};
-use crate::ui::{Rect, Ui};
+use crate::ui::{ButtonStyle, Rect, Ui};
 
 const LYRIC_SIZE: f32 = 14.0;
 const LYRIC_LINE_H: f32 = 19.0;
 /// Space above the first and below the last line (so they can reach the middle).
 const LYRIC_PAD: f32 = 60.0;
+/// A song in the queue list.
+const ROW_H: f32 = 34.0;
 
 #[derive(Default)]
 pub struct State {
@@ -34,6 +42,14 @@ pub struct State {
     /// baked off the UI thread into a small picture: (key, BMP bytes).
     tint: Arc<Mutex<Option<(u64, Vec<u8>)>>>,
     tint_for: u64,
+    /// The queue column is open (it takes the lyrics' place).
+    queue_open: bool,
+    /// What the split column showed last (true = queue): switching slides the new one in.
+    split_queue: bool,
+    /// The queue song last scrolled into view.
+    queue_follow: Option<usize>,
+    /// Clear was clicked once (when): a second click within 3 s empties the queue.
+    clear_armed: Option<f64>,
 }
 
 pub fn shown(s: &mut State) {
@@ -78,15 +94,20 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     s.last_t = now_t;
 
     let np = model::now_playing();
+    let local = player::view();
     card(ui, s, r, np.as_ref());
     let inner = r.pad(16.0, 12.0, 16.0, 12.0);
 
     let lyrics_on = settings::get().lyrics_enabled;
     // Keeps the lookup going for this song (the model fetches in the background).
     let _ = model::lyric_line();
-    let (lines, loading) = if lyrics_on && np.is_some() { model::lyrics_all() } else { (None, false) };
-    let split = lines.is_some();
+    let (lines, loading) = if lyrics_on && np.is_some() && !s.queue_open { model::lyrics_all() } else { (None, false) };
+    let split = s.queue_open || lines.is_some();
     if split {
+        if s.split_queue != s.queue_open {
+            s.split_queue = s.queue_open;
+            s.split_since = None;
+        }
         s.split_since.get_or_insert(now_t);
     } else {
         s.split_since = None;
@@ -109,7 +130,20 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     }
     let tx = art.right() + 16.0;
     let tw = (player.right() - tx).max(0.0);
-    let status = if !lyrics_on || np.is_none() {
+    let from_pc = np.as_ref().is_some_and(|p| p.app == player::APP);
+    let status = if np.is_none() {
+        if local.adding {
+            "Adding songs…"
+        } else if let Some(e) = local.error.as_deref() {
+            e
+        } else if local.queue.is_empty() {
+            "Press + or drop songs here to play music from this PC"
+        } else {
+            "Press play to start your queue"
+        }
+    } else if let Some(e) = local.error.as_deref().filter(|_| from_pc) {
+        e
+    } else if !lyrics_on || s.queue_open {
         ""
     } else if loading {
         "Looking for lyrics…"
@@ -187,17 +221,173 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
         }
     } else {
         ui.icon("Backward", prev.cx(), prev.cy(), 16.0, fg);
-        ui.icon("Play", play.cx(), play.cy(), 21.0, fg);
         ui.icon("Forward", next.cx(), next.cy(), 16.0, fg);
+        // Nothing playing: Play starts the queue from this PC (or asks for songs when it's empty).
+        if ui.icon_button(play, "Play", 21.0, t.text) {
+            crate::bg::spawn(player::play_or_pick);
+        }
     }
     if playing {
         ui.animate = true;
     }
 
-    // ---- lyrics column
-    if let (Some(lines), Some(since)) = (lines, s.split_since) {
+    // ---- music from this PC: add songs, and the queue toggle
+    let queue_btn = Rect::new(player.right() - 30.0, cy - 15.0, 30.0, 30.0);
+    let add_btn = Rect::new(queue_btn.x - 32.0, cy - 15.0, 30.0, 30.0);
+    if ui.icon_button(add_btn, "Plus", 16.0, t.subtext) {
+        crate::bg::spawn(|| player::pick_files(true));
+    }
+    if ui.icon_button(queue_btn, "ListBullet", 16.0, if s.queue_open { t.accent } else { t.subtext }) {
+        s.queue_open = !s.queue_open;
+        s.queue_follow = None;
+        s.clear_armed = None;
+    }
+
+    // ---- the split column: queue or lyrics
+    if let Some(since) = s.split_since {
         let col = Rect::new(player.right() + 16.0, inner.y, inner.right() - player.right() - 16.0, inner.h);
-        draw_lyrics(ui, s, col, &lines, pos, dt, (now_t - since) as f32);
+        let age = (now_t - since) as f32;
+        if s.queue_open {
+            draw_queue(ui, s, col, &local, now_t, age);
+        } else if let Some(lines) = lines {
+            draw_lyrics(ui, s, col, &lines, pos, dt, age);
+        }
+    }
+}
+
+/// The queue column: header (count, shuffle, repeat, add folder, clear) over the scrolling song list.
+fn draw_queue(ui: &mut Ui, s: &mut State, col: Rect, q: &player::View, now_t: f64, age: f32) {
+    // Slide in from the right and fade in, as the lyrics do.
+    let k = (age / 0.32).clamp(0.0, 1.0);
+    let ease = 1.0 - (1.0 - k).powi(3);
+    if k < 1.0 {
+        ui.animate = true;
+    }
+    let shift = 24.0 * (1.0 - ease);
+    let alpha = ui.alpha;
+    ui.alpha *= ease;
+    queue_body(ui, s, Rect::new(col.x + shift, col.y, col.w, col.h), q, now_t);
+    ui.alpha = alpha;
+}
+
+fn queue_body(ui: &mut Ui, s: &mut State, col: Rect, q: &player::View, now_t: f64) {
+    let t = ui.t;
+    ui.g.fill_round(Rect::new(col.x - 8.0, col.y + 6.0, 1.0, col.h - 12.0).d2d(), 0.0, ui.c(t.stroke));
+    let view = Rect::new(col.x + 8.0, col.y, col.w - 8.0, col.h);
+
+    // ---- header
+    let head = Rect::new(view.x, view.y, view.w, 24.0);
+    let mut label = if q.queue.is_empty() { "QUEUE".to_string() } else { format!("QUEUE · {}", q.queue.len()) };
+    if q.adding {
+        label.push_str(" · adding…");
+    }
+    ui.text(&label, Rect::new(head.x, head.y, head.w - 4.0 * 26.0, head.h), 11.0, BOLD, t.subtext, Align::Left);
+    let button = |i: f32| Rect::new(head.right() - 24.0 - i * 26.0, head.cy() - 12.0, 24.0, 24.0);
+    if s.clear_armed.is_some_and(|at| now_t - at > 3.0) {
+        s.clear_armed = None;
+    }
+    if !q.queue.is_empty() {
+        let armed = s.clear_armed.is_some();
+        if ui.icon_button(button(0.0), "Trash", 14.0, if armed { t.danger } else { t.subtext }) {
+            if armed {
+                s.clear_armed = None;
+                crate::bg::spawn(player::clear);
+            } else {
+                s.clear_armed = Some(now_t);
+            }
+        }
+        if armed {
+            ui.animate = true; // to disarm on time
+        }
+    }
+    if ui.icon_button(button(1.0), "Folder", 14.0, t.subtext) {
+        crate::bg::spawn(|| player::pick_folder(true));
+    }
+    let (repeat_icon, repeat_fg) = match q.repeat {
+        Repeat::Off => ("Repeat", t.subtext),
+        Repeat::All => ("Repeat", t.accent),
+        Repeat::One => ("RepeatOnce", t.accent),
+    };
+    if ui.icon_button(button(2.0), repeat_icon, 14.0, repeat_fg) {
+        crate::bg::spawn(player::cycle_repeat);
+    }
+    if ui.icon_button(button(3.0), "Shuffle", 14.0, if q.shuffle { t.accent } else { t.subtext }) {
+        let on = !q.shuffle;
+        crate::bg::spawn(move || player::set_shuffle(on));
+    }
+
+    // ---- the songs
+    let list = Rect::new(view.x, head.bottom() + 4.0, view.w, view.bottom() - head.bottom() - 4.0);
+    if q.queue.is_empty() {
+        let msg = if q.adding { "Adding songs…" } else { "Drop songs or a folder here" };
+        ui.text(msg, Rect::new(list.x, list.cy() - 26.0, list.w, 18.0), 12.0, REGULAR, t.subtext, Align::Center);
+        let b = Rect::new(list.cx() - 55.0, list.cy() + 0.0, 110.0, 28.0);
+        if !q.adding && ui.button(b, "Add songs", ButtonStyle::Normal) {
+            crate::bg::spawn(|| player::pick_files(true));
+        }
+        return;
+    }
+    let id = crate::ui::idx("np.queue", 0);
+    let content_h = q.queue.len() as f32 * ROW_H;
+    // Keep the current song in view when it changes.
+    if s.queue_follow != Some(q.index) {
+        s.queue_follow = Some(q.index);
+        let top = q.index as f32 * ROW_H;
+        let max = (content_h - list.h).max(0.0);
+        let off = ui.st.scroll.get(&id).copied().unwrap_or(0.0);
+        if top < off || top + ROW_H > off + list.h {
+            ui.st.scroll.insert(id, (top - (list.h - ROW_H) / 2.0).clamp(0.0, max));
+        }
+    }
+    // (song, take it out)
+    let mut act: Option<(usize, bool)> = None;
+    ui.scroll(id, list, content_h, |ui, top| {
+        let first = ((list.y - top) / ROW_H).floor().max(0.0) as usize;
+        let last = (((list.bottom() - top) / ROW_H).ceil().max(0.0) as usize).min(q.queue.len());
+        for i in first..last {
+            let song = &q.queue[i];
+            let row = Rect::new(list.x, top + i as f32 * ROW_H, list.w - 6.0, ROW_H);
+            let current = q.loaded && i == q.index;
+            let hover = ui.hovered(row);
+            if current || hover {
+                let bg = if current { t.accent_soft } else { t.hover };
+                ui.g.fill_round(row.inset(0.0, 1.0).d2d(), 8.0, ui.c(bg));
+            }
+            let mark = Rect::new(row.x, row.y, 26.0, row.h);
+            if current {
+                ui.icon(if q.playing { "MusicNote" } else { "Pause" }, mark.cx(), mark.cy(), 12.0, t.accent);
+            } else {
+                // Nothing loaded: the song Play starts with is marked.
+                let up_next = !q.loaded && i == q.index;
+                ui.text(&(i + 1).to_string(), mark, 11.0, if up_next { BOLD } else { REGULAR }, if up_next { t.accent } else { t.subtext }, Align::Center);
+            }
+            let side = Rect::new(row.right() - 40.0, row.y, 40.0, row.h);
+            let tx = mark.right() + 2.0;
+            let tw = (side.x - tx - 4.0).max(0.0);
+            let fg = if current { t.accent } else { t.text };
+            if song.artist.is_empty() {
+                ui.text(&song.title, Rect::new(tx, row.y, tw, row.h), 12.5, SEMIBOLD, fg, Align::Left);
+            } else {
+                ui.text(&song.title, Rect::new(tx, row.y + 3.0, tw, 16.0), 12.5, SEMIBOLD, fg, Align::Left);
+                ui.text(&song.artist, Rect::new(tx, row.y + 18.0, tw, 14.0), 11.0, REGULAR, t.subtext, Align::Left);
+            }
+            if hover {
+                let x = Rect::new(side.right() - 28.0, row.cy() - 12.0, 24.0, 24.0);
+                if ui.icon_button(x, "XMark", 12.0, t.subtext) {
+                    act = Some((i, true));
+                }
+            } else if song.duration > 0.0 {
+                ui.text(&fmt(song.duration), side.pad(0.0, 0.0, 6.0, 0.0), 11.0, REGULAR, t.subtext, Align::Right);
+            }
+            if act.is_none() && ui.clicked(row) {
+                act = Some((i, false));
+            }
+        }
+    });
+    match act {
+        Some((i, true)) => crate::bg::spawn(move || player::remove(i)),
+        Some((i, false)) => crate::bg::spawn(move || player::play_at(i)),
+        None => {}
     }
 }
 

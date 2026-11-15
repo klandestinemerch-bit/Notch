@@ -323,6 +323,11 @@ thread_local! {
     static PREV_FOREGROUND: RefCell<isize> = const { RefCell::new(0) };
 }
 
+/// The panel is open on the Music tool (drops there go into its queue).
+fn music_open() -> bool {
+    with(|n| n.expanded() && n.tool == "nowplaying").unwrap_or(false)
+}
+
 /// Runs `f` on the notch if it exists and isn't already borrowed (re-entrant messages are skipped).
 fn with<R>(f: impl FnOnce(&mut Notch) -> R) -> Option<R> {
     APP.with(|a| a.try_borrow_mut().ok().and_then(|mut a| a.as_mut().map(f)))
@@ -1023,6 +1028,10 @@ fn main() -> Result<()> {
                         if views::shelf::dragging() {
                             return;
                         }
+                        // Over the open Music tool, songs join its queue: stay there.
+                        if music_open() {
+                            return;
+                        }
                         with(|n| {
                             n.expand();
                             n.show_tool("shelf");
@@ -1033,7 +1042,9 @@ fn main() -> Result<()> {
                         if views::shelf::dragging() {
                             return;
                         }
-                        if !files.is_empty() {
+                        if music_open() && files.iter().any(|f| services::player::droppable(f)) {
+                            bg::spawn(move || services::player::add(files, true));
+                        } else if !files.is_empty() {
                             services::shelf::add(&files);
                         } else if let Some(t) = text {
                             let _ = services::shelf::add_text(&t);

@@ -40,7 +40,7 @@
   | Shelf | Park files from anywhere; box-select, multi-select, drag them back out |
   | Phone | Send files and text both ways with your phone over Wi-Fi: scan a QR code, no app needed |
   | Clipboard | Clipboard history |
-  | Music | Now playing with synced lyrics |
+  | Music | Now playing with synced lyrics, and a player for music files on your PC (queue, shuffle, repeat) |
   | To-Dos | Lists, due dates with a clock-face time picker, priorities, optional TickTick sync |
   | Calendar | Month and day views, local events, .ics subscriptions, dated to-dos |
   | Timers | Pomodoro, countdown, stopwatch |

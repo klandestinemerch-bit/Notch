@@ -10,6 +10,7 @@ pub mod audio;
 pub mod brightness;
 pub mod radios;
 pub mod media;
+pub mod player;
 pub mod lyrics;
 pub mod notifications;
 pub mod prayer;

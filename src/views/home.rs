@@ -421,6 +421,9 @@ fn now_playing_card(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'stati
     ui.icon(if playing { "Pause" } else { "Play" }, play.cx() + if playing { 0.0 } else { 1.0 }, play.cy(), 18.0, with_alpha(t.on_accent, dim));
     if has && ui.clicked(play) {
         crate::bg::spawn(media::play_pause);
+    } else if !has && !crate::services::player::view().queue.is_empty() && ui.clicked(play) {
+        // Nothing playing: pick up the queue of songs from this PC.
+        crate::bg::spawn(crate::services::player::play_pause);
     }
 }
 
