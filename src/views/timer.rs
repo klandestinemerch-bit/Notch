@@ -10,6 +10,7 @@ use crate::services::timers::Kind;
 use crate::ui::{id, Rect, Ui};
 
 use super::picker::{self, Dial, Field, Mode, Picked};
+use crate::i18n::tr;
 
 const SOUNDS: [&str; 4] = ["No Sound", "Soft Chime", "Bell", "Ping"];
 /// Longest timer / pomodoro phase the picker allows (11h 59m).
@@ -237,7 +238,7 @@ fn body(ui: &mut Ui, s: &mut State, r: Rect, rest: Rect) {
                 x += w + 6.0;
             }
             if s.laps.is_empty() {
-                let hint = if running { "Press the flag for a lap" } else { "Start, then press the flag for laps" };
+                let hint = if running { tr("Press the flag for a lap") } else { tr("Start, then press the flag for laps") };
                 ui.text(hint, row, 12.0, MEDIUM, t.subtext, Align::Left);
             }
         }
@@ -251,8 +252,8 @@ fn body(ui: &mut Ui, s: &mut State, r: Rect, rest: Rect) {
             let rounds = cur.map_or(0, |c| c.rounds);
             // C# stack (margin-top 10, centred): title 18, +3 session 15, +7 dots 7, +8 today 14.5.
             let y = inner.cy() - 31.0;
-            title_row(ui, ix, y, iw, if is_break { "Moon" } else { "Bolt" }, if is_break { "Break" } else { "Focus" });
-            ui.text(&format!("Session {} of 4", rounds % 4 + 1), Rect::new(ix, y + 20.0, iw, 17.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+            title_row(ui, ix, y, iw, if is_break { "Moon" } else { "Bolt" }, if is_break { tr("Break") } else { tr("Focus") });
+            ui.text(&crate::i18n::tf!("Session {} of 4", "Sesi {} dari 4", rounds % 4 + 1), Rect::new(ix, y + 20.0, iw, 17.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
             let mut filled = rounds % 4;
             if rounds > 0 && filled == 0 {
                 filled = 4;
@@ -262,28 +263,28 @@ fn body(ui: &mut Ui, s: &mut State, r: Rect, rest: Rect) {
                 ui.g.fill_circle(ix + 3.5 + i as f32 * 13.0, y + 46.5, 3.5, ui.c(c));
             }
             let today = match rounds {
-                0 => "No sessions yet today".to_string(),
-                1 => "1 session today".to_string(),
-                n => format!("{n} sessions today"),
+                0 => tr("No sessions yet today").to_string(),
+                1 => tr("1 session today").to_string(),
+                n => crate::i18n::tf!("{n} sessions today", "{n} sesi hari ini"),
             };
             ui.text(&today, Rect::new(ix, y + 57.0, iw, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
         }
         Kind::Countdown => {
             let y = inner.cy() - 24.0;
-            title_row(ui, ix, y, iw, "Clock", "Timer");
-            ui.text(&format!("{} countdown", picker::text((timer_min / 60) as u32, (timer_min % 60) as u32, Mode::Length)), Rect::new(ix, y + 20.0, iw, 17.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
-            ui.text("Stays in the closed notch.", Rect::new(ix, y + 43.0, iw, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+            title_row(ui, ix, y, iw, "Clock", tr("Timer"));
+            ui.text(&crate::i18n::tf!("{} countdown", "Hitung mundur {}", picker::text((timer_min / 60) as u32, (timer_min % 60) as u32, Mode::Length)), Rect::new(ix, y + 20.0, iw, 17.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+            ui.text(tr("Stays in the closed notch."), Rect::new(ix, y + 43.0, iw, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
         }
         Kind::Stopwatch => {
             let y = inner.cy() - 24.0;
-            title_row(ui, ix, y, iw, "Clock", "Stopwatch");
+            title_row(ui, ix, y, iw, "Clock", tr("Stopwatch"));
             let laps = match s.laps.len() {
-                0 => "No laps yet".to_string(),
-                1 => "1 lap".to_string(),
-                n => format!("{n} laps"),
+                0 => tr("No laps yet").to_string(),
+                1 => tr("1 lap").to_string(),
+                n => crate::i18n::tf!("{n} laps", "{n} putaran"),
             };
             ui.text(&laps, Rect::new(ix, y + 20.0, iw, 17.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
-            ui.text("Counts up from zero.", Rect::new(ix, y + 43.0, iw, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+            ui.text(tr("Counts up from zero."), Rect::new(ix, y + 43.0, iw, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
         }
     }
     s.picked = None;
@@ -365,7 +366,7 @@ fn draw_popup(ui: &mut Ui, s: &mut State, area: Rect) {
 
 fn segments(ui: &mut Ui, s: &mut State, r: Rect) {
     let t = ui.t;
-    let labels = [("Timer", Some(Kind::Countdown)), ("Stopwatch", Some(Kind::Stopwatch)), ("Pomodoro", Some(Kind::Pomodoro)), ("Alarm", None)];
+    let labels = [(tr("Timer"), Some(Kind::Countdown)), (tr("Stopwatch"), Some(Kind::Stopwatch)), (tr("Pomodoro"), Some(Kind::Pomodoro)), ("Alarm", None)];
     let widths: Vec<f32> = labels.iter().map(|(l, _)| (ui.measure(l, 13.0, SEMIBOLD) + 28.0).max(96.0)).collect();
     let total: f32 = widths.iter().sum::<f32>() + 6.0;
     let bar = Rect::new(r.cx() - total / 2.0, r.y, total, 36.0);

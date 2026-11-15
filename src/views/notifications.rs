@@ -6,11 +6,12 @@ use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::gfx::{Align, REGULAR, SEMIBOLD};
-use crate::notch::{now, DAYS, MONTHS};
+use crate::notch::now;
 use crate::services::appicons;
 use crate::services::notifications::{self, Notification};
 use crate::services::settings;
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 const BODY_LINE: f32 = 17.0;
 const COLLAPSED_LINES: usize = 3;
@@ -40,12 +41,12 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
 
     let count = match list.len() {
         0 => String::new(),
-        1 => "1 notification".into(),
-        n => format!("{n} notifications"),
+        1 => tr("1 notification").into(),
+        n => crate::i18n::tf!("{n} notifications", "{n} notifikasi"),
     };
     ui.text(&count, head, 12.0, REGULAR, t.subtext, Align::Left);
     if !list.is_empty() {
-        let w = ui.measure("Clear all", 11.0, REGULAR) + 34.0;
+        let w = ui.measure(tr("Clear all"), 11.0, REGULAR) + 34.0;
         let b = Rect::new(head.right() - 10.0 - w, head.y, w, head.h);
         if ui.hit(b, 8.0) {
             notifications::clear();
@@ -53,7 +54,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
             s.expanded.clear();
         }
         ui.icon("Trash", b.x + 14.0, b.cy(), 12.0, t.subtext);
-        ui.text("Clear all", Rect::new(b.x + 25.0, b.y, w - 25.0, b.h), 11.0, REGULAR, t.subtext, Align::Left);
+        ui.text(tr("Clear all"), Rect::new(b.x + 25.0, b.y, w - 25.0, b.h), 11.0, REGULAR, t.subtext, Align::Left);
     }
 
     if list.is_empty() {
@@ -177,20 +178,20 @@ fn empty(ui: &mut Ui, r: Rect) {
     let cy = r.cy() - 14.0;
     ui.g.fill_circle(r.cx(), cy - 18.0, 17.0, ui.c(t.surface2));
     ui.icon("Bell", r.cx(), cy - 18.0, 16.0, t.subtext);
-    let title = if problem.is_some() { "Can't read notifications" } else { "No notifications yet" };
+    let title = if problem.is_some() { tr("Can't read notifications") } else { tr("No notifications yet") };
     ui.text(title, Rect::new(r.x, cy + 4.0, r.w, 22.0), 14.0, SEMIBOLD, t.text, Align::Center);
     let st = settings::shared();
     let sub = match &problem {
         Some(p) => p.clone(),
-        None if !st.notify_enabled => "Turn on notifications in Settings → Alerts to collect them.".into(),
-        None if !st.notify_keep_history => "History is off. Turn on Keep history in Settings to save them here.".into(),
-        None => "Notifications that pop out of the notch are kept here.".into(),
+        None if !st.notify_enabled => tr("Turn on notifications in Settings → Alerts to collect them.").into(),
+        None if !st.notify_keep_history => tr("History is off. Turn on Keep history in Settings to save them here.").into(),
+        None => tr("Notifications that pop out of the notch are kept here.").into(),
     };
     ui.text(&sub, Rect::new(r.x, cy + 27.0, r.w, 18.0), 12.0, REGULAR, t.subtext, Align::Center);
     if problem.is_some() {
         let w = 150.0;
         let b = Rect::new(r.cx() - w / 2.0, cy + 52.0, w, 28.0);
-        if ui.button(b, "Open privacy settings", crate::ui::ButtonStyle::Normal) {
+        if ui.button(b, tr("Open privacy settings"), crate::ui::ButtonStyle::Normal) {
             crate::shell::open_settings_page("ms-settings:privacy-notifications");
         }
     }
@@ -266,30 +267,30 @@ fn local_day(t: SystemTime, offset: i64) -> i64 {
 fn day_label(day: i64, offset: i64) -> String {
     let today = local_day(SystemTime::now(), offset);
     if day == today {
-        return "Today".into();
+        return tr("Today").into();
     }
     if day == today - 1 {
-        return "Yesterday".into();
+        return tr("Yesterday").into();
     }
     if day > today - 7 {
-        return DAYS[(day + 4).rem_euclid(7) as usize].into();
+        return crate::i18n::day_name((day + 4).rem_euclid(7) as usize).into();
     }
     let (_, m, d) = civil_from_days(day);
-    format!("{d} {}", MONTHS[(m - 1) as usize])
+    format!("{d} {}", crate::i18n::month_name(m as usize))
 }
 
 /// "now", "5m ago", "2h ago" (today, under 6 h); the clock time otherwise.
 fn age(at: SystemTime, offset: i64) -> String {
     let secs = SystemTime::now().duration_since(at).unwrap_or(Duration::ZERO).as_secs();
     if secs < 60 {
-        return "now".into();
+        return tr("now").into();
     }
     if secs < 3600 {
-        return format!("{}m ago", secs / 60);
+        return crate::i18n::tf!("{}m ago", "{} mnt lalu", secs / 60);
     }
     let today = local_day(SystemTime::now(), offset) == local_day(at, offset);
     if today && secs < 6 * 3600 {
-        return format!("{}h ago", secs / 3600);
+        return crate::i18n::tf!("{}h ago", "{} jam lalu", secs / 3600);
     }
     let local = (unix(at) + offset).rem_euclid(86_400);
     format!("{:02}:{:02}", local / 3600, local / 60 % 60)
@@ -300,9 +301,9 @@ fn demo() -> Vec<Notification> {
     let at = |mins: u64| SystemTime::now() - Duration::from_secs(mins * 60);
     let n = |id, app: &str, title: &str, body: &str, mins| Notification { id, app: app.into(), app_id: String::new(), title: title.into(), body: body.into(), arrived: at(mins), icon: String::new() };
     vec![
-        n(1, "WhatsApp", "Aulia UM", "btw, did you see the Microsoft thing? · 2 unread messages", 40),
-        n(2, "WhatsApp", "Aulia UM", "On my way, see you in ten minutes · 3 unread messages", 49),
-        n(3, "Outlook", "Weekly sync moved", "The weekly sync has been moved to Thursday at 10:00. Please update your calendars and let me know if this clashes with anything else you have planned that day, otherwise see you there.", 300),
-        n(4, "Slack", "#general", "Deploy finished", 60 * 26),
+        n(1, "WhatsApp", tr("Aulia UM"), tr("btw, did you see the Microsoft thing? · 2 unread messages"), 40),
+        n(2, "WhatsApp", tr("Aulia UM"), tr("On my way, see you in ten minutes · 3 unread messages"), 49),
+        n(3, tr("Outlook"), tr("Weekly sync moved"), tr("The weekly sync has been moved to Thursday at 10:00. Please update your calendars and let me know if this clashes with anything else you have planned that day, otherwise see you there."), 300),
+        n(4, tr("Slack"), "#general", tr("Deploy finished"), 60 * 26),
     ]
 }

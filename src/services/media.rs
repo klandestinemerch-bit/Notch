@@ -1,5 +1,6 @@
 ﻿//! What's playing, from Windows' global media session (Spotify, browsers, Media Player, …), and the
 //! transport controls. `start` subscribes once; the state is kept here and the UI reads `current()`.
+//! Songs played from this PC (`player`) take over while they play, or while loaded and nothing else plays.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -321,9 +322,49 @@ fn pretty_app(aumid: &str) -> String {
     }
 }
 
-/// What's playing now, or None when no app has a media session.
+/// Our own player's session, as Windows lists it (the local player reports itself directly instead).
+fn is_ours(n: &NowPlaying) -> bool {
+    n.app.eq_ignore_ascii_case("fathnotch")
+}
+
+/// What another app is playing (Windows' current media session).
+fn system() -> Option<NowPlaying> {
+    lock().now.clone().filter(|n| !is_ours(n))
+}
+
+/// Whether the transport drives the songs played from this PC (`player`): while they play, or while
+/// they're loaded and no other app is playing.
+fn local_first(local: &Option<NowPlaying>, system: &Option<NowPlaying>) -> bool {
+    match local {
+        None => false,
+        Some(l) => l.playing || !system.as_ref().is_some_and(|s| s.playing && !s.title.is_empty()),
+    }
+}
+
+/// What's playing now, or None when nothing is (no app has a media session, no song loaded here).
 pub fn current() -> Option<NowPlaying> {
-    lock().now.clone()
+    let local = super::player::current();
+    let system = system();
+    if local_first(&local, &system) {
+        local
+    } else {
+        system
+    }
+}
+
+fn local_in_charge() -> bool {
+    local_first(&super::player::current(), &system())
+}
+
+/// Pauses the other app that's playing (songs from this PC are starting).
+pub fn pause_others() {
+    let playing = {
+        let s = lock();
+        s.hooked.as_ref().map(|h| h.session.clone()).filter(|_| s.now.as_ref().is_some_and(|n| n.playing && !is_ours(n)))
+    };
+    if let Some(s) = playing {
+        let _ = s.TryPauseAsync().and_then(|op| op.get());
+    }
 }
 
 fn session() -> Option<Session> {
@@ -331,18 +372,27 @@ fn session() -> Option<Session> {
 }
 
 pub fn play_pause() {
+    if local_in_charge() {
+        return super::player::play_pause();
+    }
     if let Some(s) = session() {
         let _ = s.TryTogglePlayPauseAsync().and_then(|op| op.get());
     }
 }
 
 pub fn next() {
+    if local_in_charge() {
+        return super::player::next();
+    }
     if let Some(s) = session() {
         let _ = s.TrySkipNextAsync().and_then(|op| op.get());
     }
 }
 
 pub fn previous() {
+    if local_in_charge() {
+        return super::player::previous();
+    }
     if let Some(s) = session() {
         let _ = s.TrySkipPreviousAsync().and_then(|op| op.get());
     }
@@ -350,6 +400,9 @@ pub fn previous() {
 
 /// Jumps to `seconds` into the track.
 pub fn seek(seconds: f64) {
+    if local_in_charge() {
+        return super::player::seek(seconds);
+    }
     let Some(s) = session() else { return };
     let ticks = (seconds.max(0.0) * 10_000_000.0) as i64;
     let ok = s.TryChangePlaybackPositionAsync(ticks).and_then(|op| op.get()).unwrap_or(false);
@@ -373,6 +426,18 @@ mod tests {
         assert_eq!(pretty_app("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "Media Player");
         assert_eq!(pretty_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"), "Spotify");
         assert_eq!(pretty_app("Chrome"), "Google Chrome");
+        assert!(is_ours(&NowPlaying::empty(pretty_app("fathnotch.exe"))));
+        assert!(is_ours(&NowPlaying::empty(pretty_app("C:\\Tools\\FathNotch.exe"))));
+    }
+
+    #[test]
+    fn local_or_system() {
+        let np = |playing: bool| Some(NowPlaying { title: "x".into(), playing, ..NowPlaying::empty("App".into()) });
+        assert!(!local_first(&None, &np(true)));
+        assert!(local_first(&np(true), &np(true)), "this PC's songs while they play");
+        assert!(local_first(&np(false), &np(false)), "paused here, nothing else playing");
+        assert!(local_first(&np(false), &None));
+        assert!(!local_first(&np(false), &np(true)), "another app playing wins over a paused song here");
     }
 
     #[test]

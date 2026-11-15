@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::gfx::{with_alpha, Align, BOLD, REGULAR, SEMIBOLD};
 use crate::services::{notes, settings};
 use crate::ui::{id, Key, Rect, TextEdit, Ui};
+use crate::i18n::tr;
 
 const EDITOR: u64 = id("note.editor");
 const SIZE: f32 = 13.0;
@@ -74,7 +75,7 @@ fn flush(ui: &mut Ui, s: &mut State) {
         notes::update(&cur, &text);
         s.saved_text = text;
     }
-    s.status = "Saved".into();
+    s.status = tr("Saved").into();
 }
 
 /// Saves the open note SAVE_AFTER_MS after this edit unless another edit comes first (runs even if the tool
@@ -142,7 +143,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     if s.dirty && s.saved_gen.load(Ordering::SeqCst) == s.gen.load(Ordering::SeqCst) {
         s.dirty = false;
         s.saved_text = ui.st.edits.get(&EDITOR).map(|e| e.text.clone()).unwrap_or_default();
-        s.status = "Saved".into();
+        s.status = tr("Saved").into();
     }
 
     let area = r.pad(18.0, 0.0, 18.0, 10.0);
@@ -161,10 +162,10 @@ fn note_list(ui: &mut Ui, s: &mut State, r: Rect) {
     let live = ui.st.edits.get(&EDITOR).map(|e| e.text.clone()).unwrap_or_default();
 
     let head = Rect::new(r.x, r.y, r.w, 30.0);
-    ui.text("NOTES", Rect::new(head.x, head.y, 60.0, head.h), 11.0, BOLD, t.subtext, Align::Left);
+    ui.text(tr("NOTES"), Rect::new(head.x, head.y, 60.0, head.h), 11.0, BOLD, t.subtext, Align::Left);
     let count = list.iter().filter(|n| if Some(&n.id) == s.current.as_ref() { !live.trim().is_empty() } else { !n.is_blank() }).count();
     if count > 0 {
-        let x = head.x + ui.measure("NOTES", 11.0, BOLD) + 6.0;
+        let x = head.x + ui.measure(tr("NOTES"), 11.0, BOLD) + 6.0;
         ui.text(&count.to_string(), Rect::new(x, head.y, 40.0, head.h), 11.0, REGULAR, t.subtext, Align::Left);
     }
     let plus = Rect::new(head.right() - 26.0, head.cy() - 13.0, 26.0, 26.0);
@@ -227,7 +228,7 @@ fn editor_card(ui: &mut Ui, s: &mut State, r: Rect) {
 
     let text_box = body.pad(18.0, 14.0, 16.0, 6.0);
     if editor(ui, s, text_box, body) {
-        s.status = "Editing…".into();
+        s.status = tr("Editing…").into();
         schedule_save(ui, s);
     }
 
@@ -237,7 +238,7 @@ fn editor_card(ui: &mut Ui, s: &mut State, r: Rect) {
     let words = text.split_whitespace().count();
     let status = if s.status.is_empty() {
         let when = s.current.as_ref().and_then(|c| notes::get(c)).map(|n| n.when()).unwrap_or_default();
-        format!("Edited {when}")
+        crate::i18n::tf!("Edited {when}", "Diubah {when}")
     } else {
         s.status.clone()
     };
@@ -245,7 +246,7 @@ fn editor_card(ui: &mut Ui, s: &mut State, r: Rect) {
     ui.text(&status, Rect::new(foot.x, foot.y, sw + 2.0, foot.h), 11.0, REGULAR, t.subtext, Align::Left);
     let dot_x = foot.x + sw + 6.0;
     ui.text("·", Rect::new(dot_x, foot.y, 8.0, foot.h), 11.0, SEMIBOLD, t.subtext, Align::Left);
-    let wl = if words == 1 { "1 word".to_string() } else { format!("{words} words") };
+    let wl = if words == 1 { tr("1 word").to_string() } else { crate::i18n::tf!("{words} words", "{words} kata") };
     ui.text(&wl, Rect::new(dot_x + ui.measure("·", 11.0, SEMIBOLD) + 6.0, foot.y, 120.0, foot.h), 11.0, REGULAR, t.subtext, Align::Left);
     let del = Rect::new(foot.right() - 26.0, foot.cy() - 13.0, 26.0, 26.0);
     let copy = Rect::new(del.x - 2.0 - 26.0, del.y, 26.0, 26.0);
@@ -511,7 +512,7 @@ fn editor(ui: &mut Ui, s: &mut State, r: Rect, hit_area: Rect) -> bool {
     let clip = Rect::new(r.x - 4.0, r.y - 2.0, r.w + 8.0, r.h + 4.0);
     ui.push_clip(clip);
     if e.text.is_empty() {
-        ui.wrap("Jot something down. The first line is the title; it saves as you type.", Rect::new(r.x, r.y, r.w, r.h), SIZE, REGULAR, t.subtext);
+        ui.wrap(tr("Jot something down. The first line is the title; it saves as you type."), Rect::new(r.x, r.y, r.w, r.h), SIZE, REGULAR, t.subtext);
     } else {
         for (i, &(a, b)) in s.rows.iter().enumerate() {
             let y = r.y + i as f32 * LINE_H - s.scroll;

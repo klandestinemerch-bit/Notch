@@ -10,6 +10,7 @@ mod clipboard;
 mod dragdrop;
 mod gfx;
 mod http;
+mod i18n;
 mod model;
 mod notch;
 mod services;
@@ -323,6 +324,11 @@ thread_local! {
     static PREV_FOREGROUND: RefCell<isize> = const { RefCell::new(0) };
 }
 
+/// The panel is open on the Music tool (drops there go into its queue).
+fn music_open() -> bool {
+    with(|n| n.expanded() && n.tool == "nowplaying").unwrap_or(false)
+}
+
 /// Runs `f` on the notch if it exists and isn't already borrowed (re-entrant messages are skipped).
 fn with<R>(f: impl FnOnce(&mut Notch) -> R) -> Option<R> {
     APP.with(|a| a.try_borrow_mut().ok().and_then(|mut a| a.as_mut().map(f)))
@@ -490,6 +496,7 @@ fn caps_alert(on: bool) {
         return;
     }
     let (title, sub) = if on { ("Caps Lock on", "TYPING IN CAPITALS") } else { ("Caps Lock off", "typing in lowercase") };
+    let (title, sub) = (crate::i18n::tr(title), crate::i18n::tr(sub));
     model::push_alert(Alert {
         key: "lock".into(),
         kind: AlertKind::Compact { icon: "ArrowUp", title: title.into(), sub: sub.into() },
@@ -539,10 +546,15 @@ fn tray_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
         let capsule = settings::get().notch_style == "Capsule";
-        let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, w!("Settings"));
-        let _ = AppendMenuW(menu, MF_STRING | if capsule { MF_CHECKED } else { MF_UNCHECKED }, MENU_STYLE, w!("Capsule style"));
+        let (settings_l, style_l, quit_l) = (
+            windows::core::HSTRING::from(crate::i18n::tr("Settings")),
+            windows::core::HSTRING::from(crate::i18n::tr("Capsule style")),
+            windows::core::HSTRING::from(crate::i18n::tr("Quit FathNotch")),
+        );
+        let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, &settings_l);
+        let _ = AppendMenuW(menu, MF_STRING | if capsule { MF_CHECKED } else { MF_UNCHECKED }, MENU_STYLE, &style_l);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, w!("Quit FathNotch"));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, &quit_l);
         let mut p = POINT::default();
         let _ = GetCursorPos(&mut p);
         let _ = SetForegroundWindow(hwnd);
@@ -1023,6 +1035,10 @@ fn main() -> Result<()> {
                         if views::shelf::dragging() {
                             return;
                         }
+                        // Over the open Music tool, songs join its queue: stay there.
+                        if music_open() {
+                            return;
+                        }
                         with(|n| {
                             n.expand();
                             n.show_tool("shelf");
@@ -1033,7 +1049,9 @@ fn main() -> Result<()> {
                         if views::shelf::dragging() {
                             return;
                         }
-                        if !files.is_empty() {
+                        if music_open() && files.iter().any(|f| services::player::droppable(f)) {
+                            bg::spawn(move || services::player::add(files, true));
+                        } else if !files.is_empty() {
                             services::shelf::add(&files);
                         } else if let Some(t) = text {
                             let _ = services::shelf::add_text(&t);

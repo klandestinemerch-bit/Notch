@@ -9,9 +9,10 @@ use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 
 use crate::gfx::{color, with_alpha, Align, Color, BOLD, LIGHT, MEDIUM, REGULAR, SEMIBOLD};
 use crate::model;
-use crate::notch::{now, DAYS, MONTHS};
+use crate::notch::now;
 use crate::services::{calendar, media, settings, todos, weather};
 use crate::ui::{Rect, Ui};
+use crate::i18n::tr;
 
 /// The Now Playing card is 440 wide (C#: first column).
 const CARD_W: f32 = 440.0;
@@ -61,7 +62,7 @@ fn refresh_lists(s: &mut State) {
     if s.lists.as_ref().is_some_and(|(t, ..)| t.elapsed().as_secs_f32() < 2.0) {
         return;
     }
-    let hhmm = |t: Option<(u32, u32)>| t.map_or("All day".to_string(), |(h, m)| format!("{h:02}:{m:02}"));
+    let hhmm = |t: Option<(u32, u32)>| t.map_or(tr("All day").to_string(), |(h, m)| format!("{h:02}:{m:02}"));
     // Today's schedule: events and to-dos due today, all-day first, then by time.
     let (y, m, d) = calendar::today();
     let mut today: Vec<(Option<(u32, u32)>, Row)> =
@@ -128,15 +129,15 @@ fn header(ui: &mut Ui, top: Rect, go: &mut Option<&'static str>) {
 
     // Greeting (icon + caps line) over the name, centred on the avatar.
     let part = match n.hour {
-        0..=4 => "EVENING",
-        5..=11 => "MORNING",
-        12..=16 => "AFTERNOON",
-        _ => "EVENING",
+        0..=4 => tr("EVENING"),
+        5..=11 => tr("MORNING"),
+        12..=16 => tr("AFTERNOON"),
+        _ => tr("EVENING"),
     };
     let gx = av.right() + 12.0;
     let gy = av.cy() - 17.5;
     ui.icon(if (6..18).contains(&n.hour) { "Sun" } else { "Moon" }, gx + 5.5, gy + 6.5, 11.0, t.accent);
-    ui.text(&format!("GOOD {part}"), Rect::new(gx + 16.0, gy, 240.0, 13.0), 11.0, BOLD, t.accent, Align::Left);
+    ui.text(&crate::i18n::tf!("GOOD {part}", "SELAMAT {part}"), Rect::new(gx + 16.0, gy, 240.0, 13.0), 11.0, BOLD, t.accent, Align::Left);
     ui.text(&name, Rect::new(gx, gy + 13.0, 320.0, 22.0), 17.0, SEMIBOLD, t.text, Align::Left);
 
     // Right: weather pill, date pill, divider, clock.
@@ -147,7 +148,7 @@ fn header(ui: &mut Ui, top: Rect, go: &mut Option<&'static str>) {
     let div_x = clock_r.x - 14.0 - 1.0;
     ui.fill(Rect::new(div_x, top.cy() - 11.0, 1.0, 22.0), 0.0, t.stroke);
 
-    let date = format!("{}, {} {}", &DAYS[n.dow][..3], &MONTHS[n.month - 1][..3], n.day);
+    let date = crate::i18n::tf!("{}, {} {}", "{}, {2} {1}", crate::i18n::day3(n.dow), crate::i18n::month3(n.month), n.day);
     let dw = ui.measure(&date, 12.0, MEDIUM) + 39.0;
     let date_r = Rect::new(div_x - 14.0 - dw, top.cy() - 12.0, dw, 24.0);
     pill(ui, date_r, "CalendarDays", 12.0, t.subtext, &date, MEDIUM, false);
@@ -314,9 +315,9 @@ fn now_playing_card(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'stati
     let x = art.right() + 16.0;
     let w = inner.right() - x;
     let label = match &np {
-        Some(p) if p.playing => "NOW PLAYING",
-        Some(_) => "PAUSED",
-        None => "NOTHING PLAYING",
+        Some(p) if p.playing => tr("NOW PLAYING"),
+        Some(_) => tr("PAUSED"),
+        None => tr("NOTHING PLAYING"),
     };
     ui.text(label, Rect::new(x, inner.y, w - 28.0, 12.0), 10.0, BOLD, t.accent, Align::Left);
     let open = Rect::new(inner.right() + 6.0 - 26.0, inner.y - 4.0, 26.0, 26.0);
@@ -325,7 +326,7 @@ fn now_playing_card(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'stati
     }
     let (title, by) = match &np {
         Some(p) => (p.title.clone(), [p.artist.as_str(), p.app.as_str()].iter().filter(|s| !s.trim().is_empty()).cloned().collect::<Vec<_>>().join(" · ")),
-        None => ("Nothing playing".to_string(), String::new()),
+        None => (tr("Nothing playing").to_string(), String::new()),
     };
     ui.text(&title, Rect::new(x, inner.y + 14.0, w - 28.0, 19.0), 14.0, SEMIBOLD, t.text, Align::Left);
     ui.text(&by, Rect::new(x, inner.y + 33.0, w - 28.0, 16.0), 12.0, REGULAR, t.subtext, Align::Left);
@@ -408,7 +409,9 @@ fn now_playing_card(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'stati
         ui.icon("Backward", prev.cx(), prev.cy(), 18.0, fg);
         ui.icon("Forward", next.cx(), next.cy(), 18.0, fg);
     }
-    let dim = if has { 1.0 } else { 0.35 };
+    // Nothing playing but songs queued on this PC: Play picks them up, so it isn't dimmed.
+    let resumable = !has && !crate::services::player::view().queue.is_empty();
+    let dim = if has || resumable { 1.0 } else { 0.35 };
     if has {
         let glow = if ui.hovered(play) { 0.6 } else { 0.35 };
         for i in 0..5 {
@@ -421,6 +424,9 @@ fn now_playing_card(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'stati
     ui.icon(if playing { "Pause" } else { "Play" }, play.cx() + if playing { 0.0 } else { 1.0 }, play.cy(), 18.0, with_alpha(t.on_accent, dim));
     if has && ui.clicked(play) {
         crate::bg::spawn(media::play_pause);
+    } else if resumable && ui.clicked(play) {
+        // Nothing playing: pick up the queue of songs from this PC.
+        crate::bg::spawn(crate::services::player::play_pause);
     }
 }
 
@@ -460,11 +466,11 @@ fn today_card(ui: &mut Ui, s: &State, r: Rect, go: &mut Option<&'static str>) {
     let top = r.y + 38.0;
     let fit = (((r.bottom() - 8.0 - top) / ROW_H).floor() as usize).max(1);
     let (shown, more) = if rows.len() > fit { (fit - 1, rows.len() - (fit - 1)) } else { (rows.len(), 0) };
-    let header = widget(ui, r, "CalendarDays", "Today", rows.len());
+    let header = widget(ui, r, "CalendarDays", tr("Today"), rows.len());
     if rows.is_empty() {
         let good = color(0x32D74B, 1.0);
         ui.icon("Check", x + 12.0, top + ROW_H / 2.0, 12.0, good);
-        ui.text("Nothing scheduled, no open to-dos", Rect::new(x + 24.0, top, w - 24.0, ROW_H), 12.0, REGULAR, t.subtext, Align::Left);
+        ui.text(tr("Nothing scheduled, no open to-dos"), Rect::new(x + 24.0, top, w - 24.0, ROW_H), 12.0, REGULAR, t.subtext, Align::Left);
     }
     for (i, row) in rows.iter().take(shown).enumerate() {
         let rr = Rect::new(x, top + i as f32 * ROW_H, w, ROW_H);
@@ -489,7 +495,7 @@ fn today_card(ui: &mut Ui, s: &State, r: Rect, go: &mut Option<&'static str>) {
     }
     if more > 0 {
         let rr = Rect::new(x, top + shown as f32 * ROW_H, w, ROW_H);
-        let label = format!("+{more} more");
+        let label = crate::i18n::tf!("+{more} more", "+{more} lagi");
         ui.text(&label, Rect::new(rr.x + 24.0, rr.y, rr.w - 24.0, rr.h), 11.0, REGULAR, t.subtext, Align::Left);
         if ui.clicked(rr) {
             *go = Some("todos");

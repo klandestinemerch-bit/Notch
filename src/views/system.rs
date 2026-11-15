@@ -13,6 +13,7 @@ use crate::gfx::{color, mix, Align, BOLD, REGULAR, SEMIBOLD};
 use crate::services::appicons;
 use crate::services::system::{self, Proc, Stats};
 use crate::ui::{id, ButtonStyle, Rect, Ui};
+use crate::i18n::tr;
 
 const HISTORY: usize = 60;
 const MAX_ROWS: usize = 40;
@@ -114,7 +115,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
 
 fn switch(ui: &mut Ui, s: &mut State, r: Rect) {
     let t = ui.t;
-    let labels = ["Performance", "Apps"];
+    let labels = [tr("Performance"), tr("Apps")];
     let w = 96.0;
     let bg = Rect::new(r.cx() - w - 3.0, r.y, w * 2.0 + 6.0, r.h);
     ui.fill(bg, 9.0, t.surface);
@@ -184,11 +185,11 @@ fn performance(ui: &mut Ui, s: &mut State, r: Rect) {
     let dash = "–".to_string();
 
     // CPU, with the last minute as a line along the bottom.
-    let inner = mini_card(ui, top[0], "Cpu", "CPU");
+    let inner = mini_card(ui, top[0], "Cpu", tr("CPU"));
     big(ui, inner, &st.as_ref().filter(|_| ready).map_or(dash.clone(), |x| format!("{:.0}%", x.cpu)));
     static THREADS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
     let threads = *THREADS.get_or_init(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0));
-    sub(ui, inner, &format!("{threads} threads"));
+    sub(ui, inner, &crate::i18n::tf!("{threads} threads", "{threads} thread"));
     if history.len() > 1 {
         let g = Rect::new(inner.x, inner.bottom() - 26.0, inner.w, 26.0);
         let pts: Vec<(f32, f32)> = history
@@ -206,7 +207,7 @@ fn performance(ui: &mut Ui, s: &mut State, r: Rect) {
     }
 
     // Memory.
-    let inner = mini_card(ui, top[1], "Memory", "Memory");
+    let inner = mini_card(ui, top[1], "Memory", tr("Memory"));
     match &st {
         Some(x) if x.ram_total > 0 => {
             let f = x.ram_used as f32 / x.ram_total as f32;
@@ -219,19 +220,19 @@ fn performance(ui: &mut Ui, s: &mut State, r: Rect) {
 
     // System disk.
     let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
-    let inner = mini_card(ui, top[2], "Drive", &format!("Disk {drive}"));
+    let inner = mini_card(ui, top[2], "Drive", &crate::i18n::tf!("Disk {drive}", "Disk {drive}"));
     match st.as_ref().and_then(|x| x.disk) {
         Some((used, total)) if total > 0 => {
             let f = used as f32 / total as f32;
             big(ui, inner, &format!("{:.0}%", f * 100.0));
-            sub(ui, inner, &format!("{} free", gb(total - used)));
+            sub(ui, inner, &crate::i18n::tf!("{} free", "{} kosong", gb(total - used)));
             bar(ui, inner, f, t.accent);
         }
         _ => big(ui, inner, &dash),
     }
 
     // Network.
-    let inner = mini_card(ui, bottom[0], "Wifi", "Network");
+    let inner = mini_card(ui, bottom[0], "Wifi", tr("Network"));
     let (down, up) = match &st {
         Some(x) if ready => (system::rate(x.net_down), system::rate(x.net_up)),
         _ => (dash.clone(), dash.clone()),
@@ -244,22 +245,22 @@ fn performance(ui: &mut Ui, s: &mut State, r: Rect) {
     // Battery.
     let battery = st.as_ref().and_then(|x| x.battery);
     let charging = battery.is_some_and(|(_, plugged)| plugged);
-    let inner = mini_card(ui, bottom[1], if battery.is_none() || charging { "Bolt" } else { "BatteryFull" }, "Battery");
+    let inner = mini_card(ui, bottom[1], if battery.is_none() || charging { "Bolt" } else { "BatteryFull" }, tr("Battery"));
     match battery {
         None if st.is_some() => {
-            big(ui, inner, "AC");
-            sub(ui, inner, "No battery");
+            big(ui, inner, tr("AC"));
+            sub(ui, inner, tr("No battery"));
             bar(ui, inner, 1.0, t.accent);
         }
         None => big(ui, inner, &dash),
         Some((pct, plugged)) => {
             big(ui, inner, &format!("{pct}%"));
             let text = if plugged {
-                if pct >= 99 { "Fully charged".to_string() } else { "Charging".to_string() }
+                if pct >= 99 { tr("Fully charged").to_string() } else { tr("Charging").to_string() }
             } else {
                 match st.as_ref().and_then(|x| x.battery_secs) {
-                    Some(secs) if secs > 0 => format!("{}:{:02} remaining", secs / 3600, secs / 60 % 60),
-                    _ => "On battery".to_string(),
+                    Some(secs) if secs > 0 => crate::i18n::tf!("{}:{:02} remaining", "{}:{:02} tersisa", secs / 3600, secs / 60 % 60),
+                    _ => tr("On battery").to_string(),
                 }
             };
             sub(ui, inner, &text);
@@ -268,10 +269,10 @@ fn performance(ui: &mut Ui, s: &mut State, r: Rect) {
     }
 
     // Uptime.
-    let inner = mini_card(ui, bottom[2], "Clock", "Uptime");
+    let inner = mini_card(ui, bottom[2], "Clock", tr("Uptime"));
     let ms = unsafe { windows::Win32::System::SystemInformation::GetTickCount64() };
     let (days, hours, mins) = (ms / 86_400_000, ms / 3_600_000 % 24, ms / 60_000 % 60);
-    big(ui, inner, &if days >= 1 { format!("{days}d {hours}h") } else { format!("{hours}h {mins}m") });
+    big(ui, inner, &if days >= 1 { crate::i18n::tf!("{days}d {hours}h", "{days}h {hours}j") } else { crate::i18n::tf!("{hours}h {mins}m", "{hours}j {mins}m") });
     sub(ui, inner, &std::env::var("COMPUTERNAME").unwrap_or_default());
 }
 
@@ -298,8 +299,8 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
 
     // Totals: "CPU 3%  ·  Memory 51%   58 apps".
     let cpu_total: f32 = procs.iter().map(|p| p.cpu).sum::<f32>().min(100.0);
-    let cpu = if first { "CPU …".to_string() } else { format!("CPU {cpu_total:.0}%") };
-    let mem = mem_pct.map_or("Memory".to_string(), |m| format!("Memory {m:.0}%"));
+    let cpu = if first { tr("CPU …").to_string() } else { format!("CPU {cpu_total:.0}%") };
+    let mem = mem_pct.map_or(tr("Memory").to_string(), |m| crate::i18n::tf!("Memory {m:.0}%", "Memori {m:.0}%"));
     let mut x = head.x;
     let w = ui.measure(&cpu, 12.0, SEMIBOLD);
     ui.text(&cpu, Rect::new(x, head.y, w + 4.0, head.h), 12.0, SEMIBOLD, t.text, Align::Left);
@@ -318,7 +319,7 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
         crate::shell::open("taskmgr.exe");
     }
     let mut cx = arrow.x - 4.0;
-    for (sort, label) in [(Sort::Name, "Name"), (Sort::Memory, "Memory"), (Sort::Cpu, "CPU")] {
+    for (sort, label) in [(Sort::Name, tr("Name")), (Sort::Memory, "Memory"), (Sort::Cpu, tr("CPU"))] {
         let cw = ui.measure(label, 11.0, SEMIBOLD) + 20.0;
         cx -= cw + 4.0;
         let c = Rect::new(cx, head.cy() - 13.0, cw, 26.0);
@@ -334,15 +335,15 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
             s.sort = sort;
         }
     }
-    let count = message.unwrap_or_else(|| format!("{} apps", procs.len()));
+    let count = message.unwrap_or_else(|| crate::i18n::tf!("{} apps", "{} aplikasi", procs.len()));
     ui.text(&count, Rect::new(x, head.y, (cx - 8.0 - x).max(0.0), head.h), 11.0, REGULAR, t.subtext, Align::Left);
 
     // Column captions (margin 10,6,14,4).
     let (caps_r, list) = rest.take_top(6.0 + 14.0 + 4.0, 0.0);
     let caps_r = Rect::new(caps_r.x + 10.0, caps_r.y + 6.0, caps_r.w - 24.0, 14.0);
     let cols = Columns::new(caps_r);
-    caps(ui, "App", Rect::new(caps_r.x + 30.0, caps_r.y, 100.0, caps_r.h), 10.0, Align::Left);
-    caps(ui, "CPU", cols.cpu, 10.0, Align::Right);
+    caps(ui, tr("App"), Rect::new(caps_r.x + 30.0, caps_r.y, 100.0, caps_r.h), 10.0, Align::Left);
+    caps(ui, tr("CPU"), cols.cpu, 10.0, Align::Right);
     caps(ui, "Memory", cols.mem, 10.0, Align::Right);
 
     let mut sorted = procs;
@@ -353,7 +354,7 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
     }
     sorted.truncate(MAX_ROWS);
     if sorted.is_empty() {
-        ui.text("Reading running apps…", list, 12.0, REGULAR, t.subtext, Align::Center);
+        ui.text(tr("Reading running apps…"), list, 12.0, REGULAR, t.subtext, Align::Center);
         return;
     }
 
@@ -397,10 +398,10 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
                 let clicked = if armed {
                     let hb = ui.hovered(b);
                     ui.fill(b, 8.0, if hb { mix(t.danger, t.text, 0.12) } else { t.danger });
-                    ui.text("Sure?", b, 11.0, SEMIBOLD, color(0xFFFFFF, 1.0), Align::Center);
+                    ui.text(tr("Sure?"), b, 11.0, SEMIBOLD, color(0xFFFFFF, 1.0), Align::Center);
                     ui.clicked(b)
                 } else {
-                    ui.button(b, "End task", ButtonStyle::Normal)
+                    ui.button(b, tr("End task"), ButtonStyle::Normal)
                 };
                 if clicked {
                     if armed {
@@ -421,7 +422,7 @@ fn apps(ui: &mut Ui, s: &mut State, r: Rect) {
         bg::spawn(move || {
             let failed = system::end_all(&p.pids);
             let mut d = data.lock().unwrap();
-            d.message = (failed > 0).then(|| (format!("Couldn't end {} (it may need administrator rights)", p.title), Instant::now()));
+            d.message = (failed > 0).then(|| (crate::i18n::tf!("Couldn't end {} (it may need administrator rights)", "Tidak bisa menutup {} (mungkin perlu hak administrator)", p.title), Instant::now()));
             d.procs.retain(|x| x.name != p.name || failed > 0);
         });
     }

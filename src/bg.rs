@@ -21,6 +21,12 @@ pub fn init(hwnd: HWND) {
     }
 }
 
+/// The notch window (owner for dialogs opened from background threads).
+pub fn window() -> Option<HWND> {
+    let h = WINDOW.load(Ordering::Relaxed);
+    (h != 0).then(|| HWND(h as _))
+}
+
 /// Asks the window to redraw (safe from any thread).
 #[track_caller]
 pub fn refresh() {

@@ -25,10 +25,14 @@ features = [
     "Devices_Radios",
     "Devices_WiFi",
     "Media_Control",
+    "Media_Core", # local music player: a song file as a playback source (services/player.rs)
+    "Media_Playback", # local music player: MediaPlayer
     "Networking", # HostName (phone: the PC's LAN addresses)
     "Networking_Connectivity",
     "Networking_NetworkOperators",
     "Security_Credentials",
+    "Storage", # local music player: songs as StorageFiles (tags, album art)
+    "Storage_FileProperties",
     "Storage_Streams",
     "Web_Http",
     "Web_Http_Headers",
@@ -46,6 +50,7 @@ features = [
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Imaging",
+    "Win32_Globalization", # interface language: Windows' display language (i18n.rs)
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_Media_KernelStreaming", # Bluetooth audio: one-shot reconnect / disconnect (services/audio.rs)

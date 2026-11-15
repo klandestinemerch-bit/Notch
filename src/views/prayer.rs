@@ -13,6 +13,7 @@ use crate::model;
 use crate::services::prayer::{self, NAMES};
 use crate::services::{calendar, settings};
 use crate::ui::{ButtonStyle, Rect, Ui};
+use crate::i18n::tr;
 
 const SLOTS: usize = 5;
 
@@ -86,9 +87,9 @@ fn span(hours: f64) -> String {
         m = 0;
     }
     match (h, m) {
-        (0, m) => format!("{m} min"),
-        (h, 0) => format!("{h} h"),
-        (h, m) => format!("{h} h {m} min"),
+        (0, m) => crate::i18n::tf!("{m} min", "{m} mnt"),
+        (h, 0) => crate::i18n::tf!("{h} h", "{h} jam"),
+        (h, m) => crate::i18n::tf!("{h} h {m} min", "{h} jam {m} mnt"),
     }
 }
 
@@ -110,9 +111,9 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'static str>) 
     let Some(times) = times.filter(|_| st.prayer_enabled) else {
         // Off, or no place yet.
         let (msg, label) = if !st.prayer_enabled {
-            ("Prayer times are off", "Turn on")
+            (tr("Prayer times are off"), tr("Turn on"))
         } else {
-            ("Set your city to see today's prayer times", "Open settings")
+            (tr("Set your city to see today's prayer times"), tr("Open settings"))
         };
         ui.text(msg, Rect::new(r.x, r.cy() - 26.0, r.w, 20.0), 14.0, SEMIBOLD, t.text, Align::Center);
         let bw = ui.measure(label, 12.0, SEMIBOLD) + 32.0;
@@ -155,7 +156,7 @@ fn summary(ui: &mut Ui, r: Rect, line: &[Slot], now: f64, intro: f32) {
     let t = ui.t;
     let next = line[1];
     let city = model::prayer_city();
-    let place = if city.trim().is_empty() { "PRAYER".to_string() } else { format!("PRAYER · {}", city.trim().to_uppercase()) };
+    let place = if city.trim().is_empty() { tr("PRAYER").to_string() } else { crate::i18n::tf!("PRAYER · {}", "SHOLAT · {}", city.trim().to_uppercase()) };
 
     let h = 132.0;
     let y0 = r.cy() - h / 2.0;
@@ -168,15 +169,24 @@ fn summary(ui: &mut Ui, r: Rect, line: &[Slot], now: f64, intro: f32) {
     };
     let dy = rise(ui, 0);
     ui.text(&place, Rect::new(r.x, y0 + dy, r.w, 15.0), 11.0, BOLD, t.subtext, Align::Left);
+    // The adzan sounding: a way to stop it, right here (its alert opens this tool).
+    if crate::services::adzan::playing().is_some() {
+        let label = tr("Stop adzan");
+        let bw = ui.measure(label, 12.0, SEMIBOLD) + 24.0;
+        let b = Rect::new(r.right() - 24.0 - bw, y0 - 6.0 + dy, bw, 26.0);
+        if ui.button(b, label, ButtonStyle::Accent) {
+            crate::bg::spawn(crate::services::adzan::stop);
+        }
+    }
     let dy = rise(ui, 1);
-    ui.text("Next", Rect::new(r.x, y0 + 26.0 + dy, r.w, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+    ui.text(tr("Next"), Rect::new(r.x, y0 + 26.0 + dy, r.w, 16.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
     let dy = rise(ui, 2);
     ui.text(NAMES[next.0], Rect::new(r.x - 1.0, y0 + 40.0 + dy, r.w, 42.0), 34.0, BOLD, t.text, Align::Left);
     let dy = rise(ui, 3);
     let at = prayer::hhmm(next.1);
     let tw = ui.measure(&at, 17.0, SEMIBOLD);
     ui.text(&at, Rect::new(r.x, y0 + 84.0 + dy, tw + 4.0, 24.0), 17.0, SEMIBOLD, t.text, Align::Left);
-    ui.text(&format!("in {}", span(next.1 - now)), Rect::new(r.x + tw + 12.0, y0 + 85.0 + dy, r.w - tw - 12.0, 24.0), 14.0, SEMIBOLD, t.accent, Align::Left);
+    ui.text(&crate::i18n::tf!("in {}", "{} lagi", span(next.1 - now)), Rect::new(r.x + tw + 12.0, y0 + 85.0 + dy, r.w - tw - 12.0, 24.0), 14.0, SEMIBOLD, t.accent, Align::Left);
     let dy = rise(ui, 4);
     // Progress from the prayer we're in to the next one.
     let from = if line[0].1 <= now { line[0].1 } else { next.1 - 8.0 };

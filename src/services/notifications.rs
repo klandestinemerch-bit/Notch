@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use windows::UI::Notifications::Management::{UserNotificationListener, UserNotificationListenerAccessStatus};
 use windows::UI::Notifications::{KnownNotificationBindings, NotificationKinds, UserNotification};
+use crate::i18n::tr;
 
 #[derive(Clone, Debug)]
 pub struct Notification {
@@ -178,9 +179,9 @@ fn listener() -> Result<UserNotificationListener, &'static str> {
     match status {
         UserNotificationListenerAccessStatus::Allowed => Ok(l),
         UserNotificationListenerAccessStatus::Denied => {
-            Err("Notification access is off for FathNotch in Settings → Privacy & security → Notifications.")
+            Err(tr("Notification access is off for FathNotch in Settings → Privacy & security → Notifications."))
         }
-        _ => Err("Windows hasn't granted notification access."),
+        _ => Err(tr("Windows hasn't granted notification access.")),
     }
 }
 
@@ -304,7 +305,7 @@ fn read(n: &UserNotification, id: u32) -> Option<Notification> {
     let (title, body) = match texts.split_first() {
         Some((first, rest)) => (first.clone(), rest.join(" ")),
         // Some apps (Edge site notifications) put their text where these elements don't reach.
-        None => ("New notification".to_string(), String::new()),
+        None => (tr("New notification").to_string(), String::new()),
     };
     let arrived = n
         .CreationTime()

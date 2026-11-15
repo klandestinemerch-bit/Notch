@@ -35,6 +35,7 @@ use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThre
 use crate::model::push_alert;
 use crate::notch::{Alert, AlertKind};
 use crate::services::{calendar, radios, settings, sound, todos};
+use crate::i18n::tr;
 
 // Not in the crate's enabled feature set (they need Win32_System_IO); declared here.
 #[link(name = "kernel32")]
@@ -135,7 +136,7 @@ fn bluetooth() -> windows::core::Result<()> {
             };
             if let Some(name) = changed.filter(|n| !n.trim().is_empty()) {
                 if settings::get().bluetooth_alerts {
-                    let sub = if connected { "Connected" } else { "Disconnected" };
+                    let sub = if connected { tr("Connected") } else { tr("Disconnected") };
                     compact(format!("bt:{name}"), "Bluetooth", name, sub, 3000);
                 }
             }
@@ -183,8 +184,8 @@ fn network() {
             continue;
         }
         match now {
-            Some(name) => compact("network", "Wifi", "Connected", name, 2500),
-            None if was_online => compact("network", "Wifi", "Offline", "No network connection", 2500),
+            Some(name) => compact("network", "Wifi", tr("Connected"), name, 2500),
+            None if was_online => compact("network", "Wifi", tr("Offline"), tr("No network connection"), 2500),
             None => {}
         }
     }
@@ -263,7 +264,7 @@ fn downloads() {
                         let file = name.rsplit('\\').next().unwrap_or(&name).to_string();
                         push_alert(Alert {
                             key: format!("download:{name}"),
-                            kind: AlertKind::Full { icon: "ArrowDown", title: "Download finished".into(), sub: file, open: None, app: None },
+                            kind: AlertKind::Full { icon: "ArrowDown", title: tr("Download finished").into(), sub: file, open: None, app: None },
                             duration: Duration::from_secs(4),
                         });
                     }
@@ -329,7 +330,7 @@ fn poll_num_lock(st: &mut Polled, enabled: bool) {
     let num = unsafe { GetKeyState(VK_NUMLOCK.0 as i32) } & 1 != 0;
     if st.num.is_some_and(|was| was != num) {
         let (title, sub) =
-            if num { ("Num Lock on", "Number pad types digits") } else { ("Num Lock off", "Number pad moves the cursor") };
+            if num { (tr("Num Lock on"), tr("Number pad types digits")) } else { (tr("Num Lock off"), tr("Number pad moves the cursor")) };
         compact("lock", "Keyboard", title, sub, 1500);
     }
     st.num = Some(num);
@@ -371,14 +372,14 @@ fn poll_power(st: &mut Polled, enabled: bool) {
     }
     if was != charging {
         st.full_shown = full; // plugged in already full: "Charging · 100%" says it
-        let (icon, title) = if charging { ("Bolt", "Charging") } else { ("BatteryFull", "On battery") };
+        let (icon, title) = if charging { ("Bolt", tr("Charging")) } else { ("BatteryFull", tr("On battery")) };
         compact("power", icon, title, format!("{pct}%"), 3000);
         return;
     }
     if charging {
         if full && !st.full_shown {
             st.full_shown = true;
-            compact("power", "BatteryFull", "Fully charged", "100%", 3000);
+            compact("power", "BatteryFull", tr("Fully charged"), "100%", 3000);
         }
         return;
     }
@@ -387,7 +388,7 @@ fn poll_power(st: &mut Polled, enabled: bool) {
             continue;
         }
         st.low_shown = t;
-        compact("power", "BatteryFull", "Battery low", format!("{pct}% left · plug in soon"), 3000);
+        compact("power", "BatteryFull", tr("Battery low"), format!("{pct}% left · plug in soon"), 3000);
         return;
     }
 }
@@ -413,7 +414,7 @@ fn language(lang: u32) -> (String, String) {
             return (code.to_uppercase(), display);
         }
     }
-    (format!("{lang:04X}"), "Keyboard language changed".into())
+    (format!("{lang:04X}"), tr("Keyboard language changed").into())
 }
 
 fn current_layout() -> Option<(isize, u32)> {
@@ -522,11 +523,11 @@ fn poll_privacy(enabled: bool) {
         return;
     }
     crate::bg::refresh(); // the dot
-    let label = |app: String| if app.is_empty() { "An app is using it".to_string() } else { format!("By {app}") };
+    let label = |app: String| if app.is_empty() { tr("An app is using it").to_string() } else { format!("By {app}") };
     if let (Some(app), false) = (camera, was_camera) {
-        compact("privacy:camera", "Photo", "Camera in use", label(app), 3000);
+        compact("privacy:camera", "Photo", tr("Camera in use"), label(app), 3000);
     } else if let (Some(app), false) = (mic, was_mic) {
-        compact("privacy:mic", "Microphone", "Microphone in use", label(app), 3000);
+        compact("privacy:mic", "Microphone", tr("Microphone in use"), label(app), 3000);
     }
 }
 

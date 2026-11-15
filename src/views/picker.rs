@@ -12,6 +12,7 @@ use std::f32::consts::TAU;
 
 use crate::gfx::{with_alpha, Align, LIGHT, MEDIUM, REGULAR, SEMIBOLD};
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 /// What's being picked.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -156,8 +157,8 @@ pub fn dial(ui: &mut Ui, c: &mut Dial, r: Rect, clear: Option<&str>) -> Picked {
     let a2 = Rect::new(a1.x, a1.bottom() + 4.0, 30.0, 16.0);
     match c.mode {
         Mode::Clock => {
-            ui.text("AM", a1, 12.0, SEMIBOLD, if c.hour < 12 { t.accent } else { t.subtext }, Align::Left);
-            ui.text("PM", a2, 12.0, SEMIBOLD, if c.hour >= 12 { t.accent } else { t.subtext }, Align::Left);
+            ui.text(tr("AM"), a1, 12.0, SEMIBOLD, if c.hour < 12 { t.accent } else { t.subtext }, Align::Left);
+            ui.text(tr("PM"), a2, 12.0, SEMIBOLD, if c.hour >= 12 { t.accent } else { t.subtext }, Align::Left);
             if ui.clicked(a1) && c.hour >= 12 {
                 c.hour -= 12;
             }
@@ -171,14 +172,14 @@ pub fn dial(ui: &mut Ui, c: &mut Dial, r: Rect, clear: Option<&str>) -> Picked {
         }
     }
     let hint = match (c.minutes, c.mode) {
-        (true, _) => "Pick the minutes",
-        (false, Mode::Clock) => "Pick the hour",
-        (false, Mode::Length) => "Pick the hours",
+        (true, _) => tr("Pick the minutes"),
+        (false, Mode::Clock) => tr("Pick the hour"),
+        (false, Mode::Length) => tr("Pick the hours"),
     };
     ui.text(hint, Rect::new(sx + 1.0, top + big_h + 2.0, 200.0, 16.0), 12.0, REGULAR, t.subtext, Align::Left);
 
     let by = top + big_h + 30.0;
-    let set_label = if c.mode == Mode::Clock { "Set time" } else { "Set" };
+    let set_label = if c.mode == Mode::Clock { tr("Set time") } else { tr("Set") };
     let set = Rect::new(sx, by, ui.measure(set_label, 13.0, SEMIBOLD) + 28.0, 30.0);
     let hov = ui.hovered(set);
     ui.fill(set, 8.0, with_alpha(t.accent, if hov { 0.85 } else { 1.0 }));
@@ -239,8 +240,8 @@ const STEP: f32 = 1.0;
 fn pieces(hour: u32, minute: u32, mode: Mode) -> Vec<(String, Option<bool>)> {
     match mode {
         Mode::Clock => vec![(format!("{hour:02}"), Some(false)), (":".into(), None), (format!("{minute:02}"), Some(true))],
-        Mode::Length if hour > 0 => vec![(format!("{hour}h"), Some(false)), (" ".into(), None), (format!("{minute:02}m"), Some(true))],
-        Mode::Length => vec![(minute.to_string(), Some(true)), (" min".into(), None)],
+        Mode::Length if hour > 0 => vec![(crate::i18n::tf!("{hour}h", "{hour}j"), Some(false)), (" ".into(), None), (format!("{minute:02}m"), Some(true))],
+        Mode::Length => vec![(minute.to_string(), Some(true)), (tr(" min").into(), None)],
     }
 }
 

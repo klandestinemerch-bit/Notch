@@ -18,6 +18,7 @@ use windows::Win32::Graphics::DirectWrite::*;
 use crate::gfx::{with_alpha, Align, MEDIUM, REGULAR};
 use crate::services::{settings, teleprompter};
 use crate::ui::{id, Key, Rect, Ui};
+use crate::i18n::tr;
 
 const LINE_SPACING: f32 = 1.35;
 const SIDE: f32 = 24.0;
@@ -112,7 +113,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
         if hov {
             ui.fill(stage, 10.0, t.surface2);
         }
-        ui.text("Paste or write your script", stage, 17.0, MEDIUM, t.subtext, Align::Center);
+        ui.text(tr("Paste or write your script"), stage, 17.0, MEDIUM, t.subtext, Align::Center);
         if ui.clicked(stage) {
             start_editing(ui, s);
         }
@@ -288,7 +289,7 @@ fn prompt(ui: &mut Ui, s: &mut State, stage: Rect) {
     fade(ui, Rect::new(stage.x, stage.bottom() - 36.0, stage.w, 36.0), false, s.opacity);
     ui.pop_clip();
     if !s.running && s.offset > 0.0 {
-        ui.text("Paused · click or press Space", Rect::new(stage.x, stage.bottom() - 2.0 - 16.0, stage.w, 16.0), 12.0, crate::gfx::SEMIBOLD, t.subtext, Align::Center);
+        ui.text(tr("Paused · click or press Space"), Rect::new(stage.x, stage.bottom() - 2.0 - 16.0, stage.w, 16.0), 12.0, crate::gfx::SEMIBOLD, t.subtext, Align::Center);
     }
 }
 
@@ -569,7 +570,7 @@ fn editor(ui: &mut Ui, s: &mut State, r: Rect) {
 
     ui.push_clip(r.inset(2.0, 2.0));
     if s.edit.is_empty() {
-        ui.text("Paste your script here.", Rect::new(inner.x, inner.y, inner.w, EDIT_LINE), EDIT_SIZE, REGULAR, t.subtext, Align::Left);
+        ui.text(tr("Paste your script here."), Rect::new(inner.x, inner.y, inner.w, EDIT_LINE), EDIT_SIZE, REGULAR, t.subtext, Align::Left);
     }
     for (i, (_, _, text)) in lines.iter().enumerate() {
         let y = inner.y + i as f32 * EDIT_LINE - s.edit_scroll;

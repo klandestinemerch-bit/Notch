@@ -49,7 +49,7 @@ repository is written from this description.
 |---|---|
 | Home | Greeting, clock, weather pill, now-playing card, today's events and open to-dos, lyrics shortcut |
 | Control | Wi-Fi, Bluetooth, Hotspot and Silent tiles (the round icon toggles, the card opens a list); output and input device pickers with mute; volume per app; brightness per display |
-| Music | Now playing (art, controls, progress), synced lyrics, on/off toggle |
+| Music | Now playing (art, controls, progress), synced lyrics, on/off toggle; music files from this PC: + or a drop adds songs or folders to a queue (play, remove, shuffle, repeat off/all/one, clear), played with Windows' MediaPlayer and kept in player.json |
 | To-do | List, Important, Completed. Each to-do has a date (Today, Tomorrow, Next week, No date, next 14 days), a time picked on a clock face (hour, then minutes, AM/PM, Set time / All day), and a priority (None/Low/Medium/High). Two-way sync with TickTick (personal token) |
 | Calendar | Month and day views. Local events and subscribed .ics feeds. To-dos with a date appear too. Same clock-face time picker |
 | Prayer | Times computed locally (Kemenag: Fajr 20°, Isha 18°, 2-minute safety margin). A rolling timeline with a horizon line: day arcs above it, night below. Alert at each prayer time |
