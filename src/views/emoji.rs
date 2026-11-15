@@ -9,6 +9,7 @@ use std::time::Instant;
 use crate::gfx::{Align, REGULAR, SEMIBOLD};
 use crate::services::store;
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 const PER_ROW: usize = 16;
 const RECENT_FILE: &str = "emoji-recent.json";
@@ -84,7 +85,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     }
     // Search row: the field fills the width; "Copied: name" (at most 160 wide) sits on its right.
     let (top, rest) = r.take_top(34.0, 6.0);
-    let status_w = s.copied.as_ref().map_or(0.0, |(n, _)| (ui.measure(&format!("Copied: {n}"), 12.0, SEMIBOLD) + 2.0).min(160.0));
+    let status_w = s.copied.as_ref().map_or(0.0, |(n, _)| (ui.measure(&crate::i18n::tf!("Copied: {n}", "Disalin: {n}"), 12.0, SEMIBOLD) + 2.0).min(160.0));
     let field = Rect::new(top.x, top.y, top.w - if status_w > 0.0 { status_w + 12.0 } else { 0.0 }, top.h);
     let fid = id(FIELD);
     if ui.st.focus == fid {
@@ -94,7 +95,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     let border = if ui.st.focus == fid { t.accent } else if ui.hovered(field) { t.track } else { t.stroke };
     ui.g.stroke_round(field.inset(0.5, 0.5).d2d(), 8.5, ui.c(border), 1.0);
     ui.icon("Magnifier", field.x + 18.5, field.cy(), 15.0, t.subtext);
-    let _ = ui.text_field(fid, field.pad(36.0, 0.0, 34.0, 0.0), "Search emoji…", 13.0);
+    let _ = ui.text_field(fid, field.pad(36.0, 0.0, 34.0, 0.0), tr("Search emoji…"), 13.0);
     let query = ui.field_text(fid).trim().to_lowercase();
     if !query.is_empty() && ui.icon_button(Rect::new(field.right() - 28.0, field.cy() - 11.0, 22.0, 22.0), "XMark", 12.0, t.subtext) {
         ui.set_field_text(fid, "");
@@ -105,7 +106,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     }
     if let Some((name, _)) = &s.copied {
         let sr = Rect::new(field.right() + 10.0, top.y, status_w, top.h);
-        ui.text(&format!("Copied: {name}"), sr, 12.0, SEMIBOLD, t.subtext, Align::Left);
+        ui.text(&crate::i18n::tf!("Copied: {name}", "Disalin: {name}"), sr, 12.0, SEMIBOLD, t.subtext, Align::Left);
     }
 
     // Category chips: 34×24, 4 apart; the selected one in the accent colour.
@@ -142,7 +143,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     let items = s.items.as_ref().unwrap().1.clone();
     if items.is_empty() {
         if !query.is_empty() || s.group == RECENT {
-            let msg = if query.is_empty() { "Emoji you copy show up here" } else { "No emoji found" };
+            let msg = if query.is_empty() { tr("Emoji you copy show up here") } else { tr("No emoji found") };
             ui.text(msg, Rect::new(grid.x, grid.y + 10.0, grid.w, 20.0), 12.0, REGULAR, t.subtext, Align::Center);
         }
         return;

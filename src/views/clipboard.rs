@@ -13,6 +13,7 @@ use crate::gfx::{color, with_alpha, Align, MEDIUM, REGULAR, SEMIBOLD};
 use crate::services::cliphistory::{self, Clip, Kind};
 use crate::services::shelf;
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 const SEARCH: &str = "clipboard.search";
 const CARD_W: f32 = 148.0;
@@ -87,7 +88,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     let (top, strip) = r.take_top(34.0, 14.0);
     let menu_btn = Rect::new(top.right() - 30.0, top.cy() - 15.0, 30.0, 30.0);
     let menu_r = s.menu.map(|(x, y)| {
-        let w = (ui.measure("Clear unpinned", 13.0, REGULAR).ceil() + 20.0).max(130.0) + 8.0;
+        let w = (ui.measure(tr("Clear unpinned"), 13.0, REGULAR).ceil() + 20.0).max(130.0) + 8.0;
         Rect::new(x.min(r.right() - w), y, w, 27.0 + 8.0)
     });
     if let Some(m) = menu_r {
@@ -106,7 +107,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     field_chrome(ui, field, ui.st.focus == sid);
     ui.icon("Magnifier", field.x + 18.5, field.cy(), 15.0, t.subtext);
     let has_text = !ui.field_text(sid).is_empty();
-    let _ = ui.text_field(sid, field.pad(36.0, 0.0, if has_text { 30.0 } else { 10.0 }, 0.0), "Search", 13.0);
+    let _ = ui.text_field(sid, field.pad(36.0, 0.0, if has_text { 30.0 } else { 10.0 }, 0.0), tr("Search"), 13.0);
     let query = ui.field_text(sid).trim().to_lowercase();
     if has_text && ui.icon_button(Rect::new(field.right() - 28.0, field.cy() - 11.0, 22.0, 22.0), "XMark", 12.0, t.subtext) {
         ui.set_field_text(sid, "");
@@ -133,7 +134,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     }
     if let Some(at) = s.status {
         if at.elapsed().as_secs_f32() < 1.5 {
-            ui.text("Copied", Rect::new(menu_btn.x - 8.0 - 100.0, top.y, 100.0, top.h), 12.0, SEMIBOLD, good, Align::Right);
+            ui.text(tr("Copied"), Rect::new(menu_btn.x - 8.0 - 100.0, top.y, 100.0, top.h), 12.0, SEMIBOLD, good, Align::Right);
             ui.animate = true;
         } else {
             s.status = None;
@@ -143,7 +144,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     // Cards.
     let items: Vec<Clip> = cliphistory::all().into_iter().filter(|c| matches(c, s.filter, &query)).collect();
     if items.is_empty() {
-        ui.text("Copy something — it will show up here.", strip, 12.0, SEMIBOLD, t.subtext, Align::Center);
+        ui.text(tr("Copy something — it will show up here."), strip, 12.0, SEMIBOLD, t.subtext, Align::Center);
         draw_menu(ui, menu_r);
         return;
     }
@@ -403,6 +404,6 @@ fn draw_menu(ui: &mut Ui, m: Option<Rect>) {
     if row.contains(ui.mouse()) {
         ui.fill(row, 5.0, t.hover);
     }
-    ui.text("Clear unpinned", row.pad(10.0, 0.0, 6.0, 0.0), 13.0, REGULAR, t.text, Align::Left);
+    ui.text(tr("Clear unpinned"), row.pad(10.0, 0.0, 6.0, 0.0), 13.0, REGULAR, t.text, Align::Left);
     ui.animate = true;
 }

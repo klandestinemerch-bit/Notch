@@ -3,6 +3,7 @@
 
 use crate::bg;
 use crate::gfx::{color, mix, with_alpha, Align, BOLD, MEDIUM, REGULAR, SEMIBOLD};
+use crate::i18n::tr;
 use crate::model;
 use crate::services::{calendar, cliphistory, phone, prayer, settings, store, ticktick};
 use crate::theme::{self, ACCENTS, SCHEMES};
@@ -17,9 +18,14 @@ const SOUNDS: [&str; 4] = ["Calendar", "Chime", "Bell", "No Sound"];
 
 pub fn general(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("General", "How FathNotch behaves on your PC.");
+    p.title(tr("General"), tr("How FathNotch behaves on your PC."));
 
-    let rr = p.card(Some("PROFILE"), &[R::c("Name", "Shown in the greeting on Home.", 200.0)]);
+    // Language names stay in their own language, so either can be found whichever is on.
+    let rr = p.card(Some("LANGUAGE"), &[R::c("Language", "The language of FathNotch's menus, buttons and alerts.", 200.0)]);
+    let langs = [crate::i18n::SYSTEM.to_string(), crate::i18n::ENGLISH.into(), crate::i18n::INDONESIAN.into()];
+    p.pick(rr[0], "set.lang", &["Same as Windows", "English", "Bahasa Indonesia"], &langs, &s.language, 0, |x, v| x.language = v);
+
+    let rr = p.card(Some(tr("PROFILE")), &[R::c(tr("Name"), tr("Shown in the greeting on Home."), 200.0)]);
     if let Some(r) = rr[0] {
         let user = std::env::var("USERNAME").unwrap_or_default();
         if let Some(v) = p.field("settings.name", r, &user, &s.display_name) {
@@ -28,20 +34,20 @@ pub fn general(p: &mut Pg) {
     }
 
     let rr = p.card(
-        Some("BEHAVIOR"),
+        Some(tr("BEHAVIOR")),
         &[
-            R::c("Open notch", "Open when the pointer rests on the notch, or only when you click it.", 140.0),
-            R::c("Hover delay", "How long the pointer rests on the notch before it opens.", 140.0),
-            R::c("Show notch", "Always, only while music, a timer or a reminder is on, or only when the pointer touches the top edge of the screen.", 140.0),
-            R::t("Hide in full screen", "Stay out of the way of full-screen apps and videos; touch the top edge to bring it back. Games hide it completely."),
-            R::t("Hide from screenshots", "Leave the notch out of screenshots, recordings and screen sharing."),
-            R::t("Dodge the pointer", "The closed notch dodges the pointer from the sides. Catch it from below."),
+            R::c(tr("Open notch"), tr("Open when the pointer rests on the notch, or only when you click it."), 140.0),
+            R::c(tr("Hover delay"), tr("How long the pointer rests on the notch before it opens."), 140.0),
+            R::c(tr("Show notch"), tr("Always, only while music, a timer or a reminder is on, or only when the pointer touches the top edge of the screen."), 140.0),
+            R::t(tr("Hide in full screen"), tr("Stay out of the way of full-screen apps and videos; touch the top edge to bring it back. Games hide it completely.")),
+            R::t(tr("Hide from screenshots"), tr("Leave the notch out of screenshots, recordings and screen sharing.")),
+            R::t(tr("Dodge the pointer"), tr("The closed notch dodges the pointer from the sides. Catch it from below.")),
         ],
     );
-    p.pick(rr[0], "set.open", &["On Hover", "On Click"], &[0, 1], &s.open_mode, 0, |x, v| x.open_mode = v);
-    p.pick(rr[1], "set.delay", &["Instant", "Fast", "Normal", "Slow"], &[0, 80, 150, 400], &s.hover_delay_ms, 2, |x, v| x.hover_delay_ms = v);
+    p.pick(rr[0], "set.open", &[tr("On Hover"), tr("On Click")], &[0, 1], &s.open_mode, 0, |x, v| x.open_mode = v);
+    p.pick(rr[1], "set.delay", &[tr("Instant"), tr("Fast"), tr("Normal"), tr("Slow")], &[0, 80, 150, 400], &s.hover_delay_ms, 2, |x, v| x.hover_delay_ms = v);
     let vis = ["Always".to_string(), "WhenActive".into(), "HoverOnly".into()];
-    p.pick(rr[2], "set.vis", &["Always", "When active", "On top-edge hover"], &vis, &s.notch_visibility, 0, |x, v| x.notch_visibility = v);
+    p.pick(rr[2], "set.vis", &[tr("Always"), tr("When active"), tr("On top-edge hover")], &vis, &s.notch_visibility, 0, |x, v| x.notch_visibility = v);
     p.tog(rr[3], s.hide_in_fullscreen, |x, v| x.hide_in_fullscreen = v);
     p.tog(rr[4], s.hide_from_capture, |x, v| x.hide_from_capture = v);
     p.tog(rr[5], s.repel_cursor, |x, v| x.repel_cursor = v);
@@ -50,18 +56,18 @@ pub fn general(p: &mut Pg) {
     let running: Vec<(String, String)> = p.s.shared.lock().unwrap().running.clone().unwrap_or_default();
     let label_of = |name: &str| running.iter().find(|(n, _)| n == name).map_or(name.to_string(), |(_, l)| l.clone());
     let pickable: Vec<&(String, String)> = running.iter().filter(|(n, _)| !s.hide_for_apps.contains(n)).collect();
-    let rm_w = p.button_w("Remove");
-    let add_w = p.button_w("Add");
+    let rm_w = p.button_w(tr("Remove"));
+    let add_w = p.button_w(tr("Add"));
     let mut rows: Vec<R> = s.hide_for_apps.iter().map(|a| R::c(label_of(a), format!("{a}.exe"), rm_w)).collect();
-    rows.push(R::c("Add an app", "Hide the notch while it's in front, on any display.", 200.0 + 6.0 + add_w));
+    rows.push(R::c(tr("Add an app"), tr("Hide the notch while it's in front, on any display."), 200.0 + 6.0 + add_w));
     if !s.hide_for_apps.is_empty() {
-        rows.push(R::c("When one is in front", "Fade out (touch the top edge to bring it back), or hide completely.", 170.0));
-        rows.push(R::c("Alerts", "Hold alerts until you switch away, or let them pop out anyway.", 200.0));
+        rows.push(R::c(tr("When one is in front"), tr("Fade out (touch the top edge to bring it back), or hide completely."), 170.0));
+        rows.push(R::c(tr("Alerts"), tr("Hold alerts until you switch away, or let them pop out anyway."), 200.0));
     }
-    let rr = p.card(Some("HIDE FOR THESE APPS"), &rows);
+    let rr = p.card(Some(tr("HIDE FOR THESE APPS")), &rows);
     let n = s.hide_for_apps.len();
     for (i, app) in s.hide_for_apps.iter().enumerate() {
-        if p.button(rr[i], "Remove", false) {
+        if p.button(rr[i], tr("Remove"), false) {
             let app = app.clone();
             settings::update(|x| x.hide_for_apps.retain(|a| *a != app));
         }
@@ -74,7 +80,7 @@ pub fn general(p: &mut Pg) {
         if let Some(i) = p.combo_enabled("set.addapp", combo_r, &labels, sel, !labels.is_empty()) {
             p.s.app_pick = i;
         }
-        if button(p.ui, rest, "Add", false, !labels.is_empty()) {
+        if button(p.ui, rest, tr("Add"), false, !labels.is_empty()) {
             if let Some((name, _)) = pickable.get(p.s.app_pick) {
                 let name = name.clone();
                 settings::update(|x| {
@@ -88,17 +94,17 @@ pub fn general(p: &mut Pg) {
     }
     if n > 0 {
         let modes = ["Fade".to_string(), "Hidden".into()];
-        p.pick(rr[n + 1], "set.hidemode", &["Fade out", "Hide completely"], &modes, &s.hide_for_apps_mode, 0, |x, v| x.hide_for_apps_mode = v);
-        p.pick(rr[n + 2], "set.hidehold", &["Wait until I switch away", "Show them anyway"], &[true, false], &s.hide_for_apps_hold_alerts, 0, |x, v| {
+        p.pick(rr[n + 1], "set.hidemode", &[tr("Fade out"), tr("Hide completely")], &modes, &s.hide_for_apps_mode, 0, |x, v| x.hide_for_apps_mode = v);
+        p.pick(rr[n + 2], "set.hidehold", &[tr("Wait until I switch away"), tr("Show them anyway")], &[true, false], &s.hide_for_apps_hold_alerts, 0, |x, v| {
             x.hide_for_apps_hold_alerts = v
         });
     }
 
     let rr = p.card(
-        Some("SYSTEM"),
+        Some(tr("SYSTEM")),
         &[
-            R::t("Open at login", "Start FathNotch when you sign in to Windows."),
-            R::t("Low memory mode", "While the notch is closed, hand unused memory back to Windows. The panel may take a moment longer to open the first time after a while."),
+            R::t(tr("Open at login"), tr("Start FathNotch when you sign in to Windows.")),
+            R::t(tr("Low memory mode"), tr("While the notch is closed, hand unused memory back to Windows. The panel may take a moment longer to open the first time after a while.")),
         ],
     );
     if let Some(r) = rr[0] {
@@ -117,12 +123,12 @@ pub fn general(p: &mut Pg) {
 
 pub fn appearance(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Appearance", "Material, color scheme and accent. Changes apply instantly.");
+    p.title(tr("Appearance"), tr("Material, color scheme and accent. Changes apply instantly."));
 
     if p.free() {
-        p.caption("MATERIAL");
+        p.caption(tr("MATERIAL"));
         let y = p.y;
-        for (i, (name, sub, glass)) in [("Solid", "Opaque, easiest to read", false), ("Translucent", "Your wallpaper shows through", true)].into_iter().enumerate() {
+        for (i, (name, sub, glass)) in [(tr("Solid"), tr("Opaque, easiest to read"), false), (tr("Translucent"), tr("Your wallpaper shows through"), true)].into_iter().enumerate() {
             let r = Rect::new(p.x + i as f32 * 167.0, y, 157.0, 108.0);
             if material_card(p, r, name, sub, glass, s.glass == glass, &s.theme_scheme) && s.glass != glass {
                 settings::update(|x| x.glass = glass);
@@ -130,7 +136,7 @@ pub fn appearance(p: &mut Pg) {
         }
         p.y = y + 112.0;
 
-        p.caption("COLOR SCHEME");
+        p.caption(tr("COLOR SCHEME"));
         let (cw, ch, gap) = (125.0, 85.0, 8.0);
         let per = (((p.w + gap) / (cw + gap)).floor() as usize).max(1);
         let auto = s.theme_accent.is_empty() || s.theme_accent == "auto";
@@ -148,10 +154,10 @@ pub fn appearance(p: &mut Pg) {
         }
         p.y += SCHEMES.len().div_ceil(per) as f32 * (ch + gap);
 
-        p.caption("ACCENT");
+        p.caption(tr("ACCENT"));
         p.y -= 4.0;
         let sub = p.ui.t.subtext;
-        let hint = "Every scheme comes with its own accent (Auto). Pick another to override it.";
+        let hint = tr("Every scheme comes with its own accent (Auto). Pick another to override it.");
         p.ui.text(hint, Rect::new(p.x + 4.0, p.y, p.w - 4.0, lh(11.0)), 11.0, REGULAR, sub, Align::Left);
         p.y += lh(11.0) + 8.0;
         let own = theme::accent(theme::scheme(&s.theme_scheme).accent);
@@ -187,13 +193,13 @@ pub fn appearance(p: &mut Pg) {
     }
 
     let rr = p.card(
-        Some("TRANSLUCENCY"),
+        Some(tr("TRANSLUCENCY")),
         &[
             R::t(
-                "Translucent",
-                "See-through notch and panels tinted by the color scheme, with a glass sheen. (Windows can't blur behind this kind of window, so it's a clear tint rather than frosted.)",
+                tr("Translucent"),
+                tr("See-through notch and panels tinted by the color scheme, with a glass sheen. (Windows can't blur behind this kind of window, so it's a clear tint rather than frosted.)"),
             ),
-            R::new("Tint", "Lower shows more of the wallpaper; higher keeps text easier to read.", 170.0, 22.0),
+            R::new(tr("Tint"), tr("Lower shows more of the wallpaper; higher keeps text easier to read."), 170.0, 22.0),
         ],
     );
     p.tog(rr[0], s.glass, |x, v| x.glass = v);
@@ -212,7 +218,7 @@ pub fn appearance(p: &mut Pg) {
         }
     }
 
-    let rr = p.card(Some("UNITS"), &[R::t("Fahrenheit & mph", "Weather units.")]);
+    let rr = p.card(Some(tr("UNITS")), &[R::t(tr("Fahrenheit & mph"), tr("Weather units."))]);
     p.tog(rr[0], s.use_fahrenheit, |x, v| x.use_fahrenheit = v);
 }
 
@@ -300,81 +306,81 @@ const IDLE_ITEMS: [(&str, &str, &str); 6] = [
 
 pub fn display(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Display", "Where the notch appears, and how big it is.");
+    p.title(tr("Display"), tr("Where the notch appears, and how big it is."));
 
     let screens = p.s.facts.monitors.clone();
-    let mut names = vec!["Primary display".to_string(), "Follow the pointer".to_string()];
+    let mut names = vec![tr("Primary display").to_string(), tr("Follow the pointer").to_string()];
     for (i, (w, h, primary)) in screens.iter().enumerate() {
-        names.push(format!("Display {} · {w}×{h}{}", i + 1, if *primary { " (primary)" } else { "" }));
+        names.push(crate::i18n::tf!("Display {} · {w}×{h}{}", "Layar {} · {w}×{h}{}", i + 1, if *primary { tr(" (primary)") } else { "" }));
     }
     let labels: Vec<&str> = names.iter().map(String::as_str).collect();
     let mut values = vec![-1, -2];
     values.extend(0..screens.len() as i32);
     let rr = p.card(
-        Some("LOCATION"),
-        &[R::c("Show notch on", "Which monitor hosts the notch. Follow the pointer moves it to whichever display you're using.", 210.0)],
+        Some(tr("LOCATION")),
+        &[R::c(tr("Show notch on"), tr("Which monitor hosts the notch. Follow the pointer moves it to whichever display you're using."), 210.0)],
     );
     p.pick(rr[0], "set.monitor", &labels, &values, &s.monitor_index, 0, |x, v| x.monitor_index = v);
 
     let rr = p.card(
-        Some("STYLE"),
+        Some(tr("STYLE")),
         &[
-            R::c("Shape", "A notch hanging from the top edge, or a floating capsule just below it.", 140.0),
-            R::t("Border", "A hairline outline around the notch. Off: pure black edges that blend into the screen."),
-            R::c("Tab bar", "A compact row of tool icons along the bottom of the open panel (easiest to navigate), or page dots.", 140.0),
-            R::t("Clock in the panel", "Today's date and the time in the middle of the open panel's header."),
-            R::t("Lyric glow", "The closed notch is plain black; while a synced lyric line shows, a soft glow in the song's colour rises from its bottom edge."),
-            R::c("Animations", "How fast tabs slide in and their cards appear one by one. Off shows everything at once.", 140.0),
+            R::c(tr("Shape"), tr("A notch hanging from the top edge, or a floating capsule just below it."), 140.0),
+            R::t(tr("Border"), tr("A hairline outline around the notch. Off: pure black edges that blend into the screen.")),
+            R::c(tr("Tab bar"), tr("A compact row of tool icons along the bottom of the open panel (easiest to navigate), or page dots."), 140.0),
+            R::t(tr("Clock in the panel"), tr("Today's date and the time in the middle of the open panel's header.")),
+            R::t(tr("Lyric glow"), tr("The closed notch is plain black; while a synced lyric line shows, a soft glow in the song's colour rises from its bottom edge.")),
+            R::c(tr("Animations"), tr("How fast tabs slide in and their cards appear one by one. Off shows everything at once."), 140.0),
         ],
     );
     let styles = ["Notch".to_string(), "Capsule".into()];
-    p.pick(rr[0], "set.style", &["Notch", "Capsule"], &styles, &s.notch_style, 0, |x, v| x.notch_style = v);
+    p.pick(rr[0], "set.style", &[tr("Notch"), tr("Capsule")], &styles, &s.notch_style, 0, |x, v| x.notch_style = v);
     p.tog(rr[1], s.notch_border, |x, v| x.notch_border = v);
     let tabs = ["Icons".to_string(), "Dots".into()];
-    p.pick(rr[2], "set.tabstyle", &["Icons", "Dots"], &tabs, &s.tab_style, 0, |x, v| x.tab_style = v);
+    p.pick(rr[2], "set.tabstyle", &[tr("Icons"), tr("Dots")], &tabs, &s.tab_style, 0, |x, v| x.tab_style = v);
     p.tog(rr[3], s.header_clock, |x, v| x.header_clock = v);
     p.tog(rr[4], s.rest_glow, |x, v| x.rest_glow = v);
     let speeds = ["Off".to_string(), "Fast".into(), "Normal".into(), "Slow".into()];
-    p.pick(rr[5], "set.anim", &["Off", "Fast", "Normal", "Slow"], &speeds, &s.anim_speed, 2, |x, v| x.anim_speed = v);
+    p.pick(rr[5], "set.anim", &[tr("Off"), tr("Fast"), tr("Normal"), tr("Slow")], &speeds, &s.anim_speed, 2, |x, v| x.anim_speed = v);
 
     let rr = p.card(
-        Some("SIZE"),
+        Some(tr("SIZE")),
         &[
-            R::c("Notch size", "Width and height of the closed notch. Tiny and Extra Small keep it narrow; larger is easier to hit on big monitors.", 140.0),
-            R::c("Panel size", "How big the open panel is drawn: header, tools and tab bar together.", 160.0),
+            R::c(tr("Notch size"), tr("Width and height of the closed notch. Tiny and Extra Small keep it narrow; larger is easier to hit on big monitors."), 140.0),
+            R::c(tr("Panel size"), tr("How big the open panel is drawn: header, tools and tab bar together."), 160.0),
         ],
     );
     let sizes: Vec<String> = ["Tiny", "ExtraSmall", "Small", "Default", "Large", "ExtraLarge"].iter().map(|x| x.to_string()).collect();
-    p.pick(rr[0], "set.size", &["Tiny", "Extra Small", "Small", "Default", "Large", "Extra Large"], &sizes, &s.notch_size, 0, |x, v| x.notch_size = v);
+    p.pick(rr[0], "set.size", &[tr("Tiny"), tr("Extra Small"), tr("Small"), tr("Default"), tr("Large"), tr("Extra Large")], &sizes, &s.notch_size, 0, |x, v| x.notch_size = v);
     if let Some(r) = rr[1] {
         let scales = [0.8, 0.85, 0.92, 1.0];
         let sel = scales.iter().position(|v| (v - s.panel_scale).abs() < 0.01).unwrap_or(0);
-        if let Some(i) = p.combo("set.scale", r, &["Compact (80%)", "Small (85%)", "Medium (92%)", "Full (100%)"], sel) {
+        if let Some(i) = p.combo("set.scale", r, &[tr("Compact (80%)"), tr("Small (85%)"), tr("Medium (92%)"), tr("Full (100%)")], sel) {
             settings::update(|x| x.panel_scale = scales[i]);
         }
     }
 
     let rr = p.card(
-        Some("IDLE NOTCH"),
+        Some(tr("IDLE NOTCH")),
         &[
-            R::c("Layout", "How several items share the closed notch when nothing is playing.", 180.0),
-            R::c("Rotate every", "How long each item stays before the next one slides in.", 140.0),
-            R::t("Peeking eyes", "Now and then a pair of cat eyes peeks out of the resting notch, blinks and looks around for a few seconds."),
-            R::c("Eyes every", "How often the eyes come out while nothing is happening.", 140.0),
-            R::t("Eyes while hidden", "When the notch is hidden (Show notch, hidden apps), the eyes still peek out for a few seconds, then it hides again."),
+            R::c(tr("Layout"), tr("How several items share the closed notch when nothing is playing."), 180.0),
+            R::c(tr("Rotate every"), tr("How long each item stays before the next one slides in."), 140.0),
+            R::t(tr("Peeking eyes"), tr("Now and then a pair of cat eyes peeks out of the resting notch, blinks and looks around for a few seconds.")),
+            R::c(tr("Eyes every"), tr("How often the eyes come out while nothing is happening."), 140.0),
+            R::t(tr("Eyes while hidden"), tr("When the notch is hidden (Show notch, hidden apps), the eyes still peek out for a few seconds, then it hides again.")),
         ],
     );
     let layouts = ["Rotate".to_string(), "Split".into(), "Row".into()];
-    p.pick(rr[0], "set.idlelayout", &["Rotate one at a time", "Left and right", "All in a row"], &layouts, &s.idle_layout, 0, |x, v| x.idle_layout = v);
-    p.pick(rr[1], "set.idlesec", &["4 seconds", "8 seconds", "15 seconds", "30 seconds"], &[4, 8, 15, 30], &s.idle_rotate_sec, 0, |x, v| x.idle_rotate_sec = v);
+    p.pick(rr[0], "set.idlelayout", &[tr("Rotate one at a time"), tr("Left and right"), tr("All in a row")], &layouts, &s.idle_layout, 0, |x, v| x.idle_layout = v);
+    p.pick(rr[1], "set.idlesec", &[tr("4 seconds"), tr("8 seconds"), tr("15 seconds"), tr("30 seconds")], &[4, 8, 15, 30], &s.idle_rotate_sec, 0, |x, v| x.idle_rotate_sec = v);
     p.tog(rr[2], s.idle_eyes, |x, v| x.idle_eyes = v);
-    p.pick(rr[3], "set.eyes", &["20 seconds", "45 seconds", "1.5 minutes", "3 minutes"], &[20, 45, 90, 180], &s.idle_eyes_every_sec, 0, |x, v| {
+    p.pick(rr[3], "set.eyes", &[tr("20 seconds"), tr("45 seconds"), tr("1.5 minutes"), tr("3 minutes")], &[20, 45, 90, 180], &s.idle_eyes_every_sec, 0, |x, v| {
         x.idle_eyes_every_sec = v
     });
     p.tog(rr[4], s.eyes_when_hidden, |x, v| x.eyes_when_hidden = v);
 
     let rows: Vec<R> = IDLE_ITEMS.iter().map(|(_, name, desc)| R::t(*name, *desc)).collect();
-    let rr = p.card(Some("SHOW WHEN IDLE"), &rows);
+    let rr = p.card(Some(tr("SHOW WHEN IDLE")), &rows);
     for (i, (id, _, _)) in IDLE_ITEMS.iter().enumerate() {
         let on = s.idle_items.iter().any(|x| x == id);
         if let Some(r) = rr[i] {
@@ -509,28 +515,28 @@ pub fn tabs(p: &mut Pg) {
     let s = p.st.clone();
     if p.s.facts.first_run {
         p.title(
-            "Welcome! Pick your tools",
+            tr("Welcome! Pick your tools"),
             "A few tools start switched off: turn on any you want, and move the rest into order with the arrows. \
              Notifications shown on the notch are kept on this PC for 30 days (Settings → Alerts to turn that off).",
         );
     } else {
-        p.title("Tabs", "The tools in the notch's bottom bar, and their order.");
+        p.title(tr("Tabs"), tr("The tools in the notch's bottom bar, and their order."));
     }
     let visible = tools::ordered(&s.tool_order, &s.hidden_tools);
-    p.caption("IN THE NOTCH");
+    p.caption(tr("IN THE NOTCH"));
     tool_list(p, &visible, true);
-    p.hint("Use the arrows to move a tab. Settings always stays at the end of the bar.", false);
+    p.hint(tr("Use the arrows to move a tab. Settings always stays at the end of the bar."), false);
 
     let all = tools::ordered(&s.tool_order, &[]);
     let hidden: Vec<&tools::Tool> = all.into_iter().filter(|t| s.hidden_tools.iter().any(|h| h == t.id)).collect();
     if !hidden.is_empty() {
-        p.caption("MORE TOOLS");
+        p.caption(tr("MORE TOOLS"));
         tool_list(p, &hidden, false);
     }
     p.y += 10.0;
-    let bw = p.button_w("Restore defaults");
+    let bw = p.button_w(tr("Restore defaults"));
     let r = Rect::new(p.x + p.w - bw, p.y, bw, CTRL_H);
-    if button(p.ui, r, "Restore defaults", false, true) {
+    if button(p.ui, r, tr("Restore defaults"), false, true) {
         settings::update(|x| {
             x.tool_order.clear();
             x.hidden_tools.clear();
@@ -553,7 +559,7 @@ fn tool_list(p: &mut Pg, list: &[&tools::Tool], shown: bool) {
         let tile = Rect::new(r.x, r.cy() - 12.0, 24.0, 24.0);
         p.ui.fill(tile, 6.0, t.hover);
         p.ui.icon(tool.icon, tile.cx(), tile.cy(), 13.0, t.text);
-        let name = if tool.title.is_empty() { "Home" } else { tool.title };
+        let name = if tool.title.is_empty() { tr("Home") } else { tr(tool.title) };
         p.ui.text(name, Rect::new(tile.right() + 11.0, r.y, 260.0, r.h), 13.0, MEDIUM, t.text, Align::Left);
         let tog = Rect::new(r.right() - 38.0, r.cy() - 11.0, 38.0, 22.0);
         if switch(p.ui, tog, shown) {
@@ -602,43 +608,43 @@ fn tool_list(p: &mut Pg, list: &[&tools::Tool], shown: bool) {
 
 pub fn alerts(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Alerts", "What pops out of the closed notch, and from which apps.");
-    let bw = p.button_w("Open settings");
+    p.title(tr("Alerts"), tr("What pops out of the closed notch, and from which apps."));
+    let bw = p.button_w(tr("Open settings"));
     let problem = crate::services::notifications::problem();
     let mut rows = vec![R::t(
-        "Show on the notch",
-        "Windows notifications from other apps pop out of the closed notch. Uses Windows notification access.",
+        tr("Show on the notch"),
+        tr("Windows notifications from other apps pop out of the closed notch. Uses Windows notification access."),
     )];
     if let Some(pr) = &problem {
-        rows.push(R::c("Not receiving notifications", pr.clone(), bw));
+        rows.push(R::c(tr("Not receiving notifications"), pr.clone(), bw));
     }
-    rows.push(R::t("Show message text", "Off shows only the app name, for privacy when sharing your screen."));
-    rows.push(R::t("Keep history", "Save notifications on this PC to read later in the Notifications tool (last 30 days). Clear them there anytime."));
-    rows.push(R::c("Windows banners", "Windows still shows its own pop-up too. Turn banners off per app in Windows Settings if you only want the notch.", bw));
-    let rr = p.card(Some("WINDOWS NOTIFICATIONS"), &rows);
+    rows.push(R::t(tr("Show message text"), tr("Off shows only the app name, for privacy when sharing your screen.")));
+    rows.push(R::t(tr("Keep history"), tr("Save notifications on this PC to read later in the Notifications tool (last 30 days). Clear them there anytime.")));
+    rows.push(R::c(tr("Windows banners"), tr("Windows still shows its own pop-up too. Turn banners off per app in Windows Settings if you only want the notch."), bw));
+    let rr = p.card(Some(tr("WINDOWS NOTIFICATIONS")), &rows);
     let k = if problem.is_some() { 1 } else { 0 };
     p.tog(rr[0], s.notify_enabled, |x, v| x.notify_enabled = v);
-    if k == 1 && p.button(rr[1], "Open settings", false) {
+    if k == 1 && p.button(rr[1], tr("Open settings"), false) {
         crate::shell::open_settings_page("ms-settings:privacy-notifications");
     }
     p.tog(rr[1 + k], s.notify_show_text, |x, v| x.notify_show_text = v);
     p.tog(rr[2 + k], s.notify_keep_history, |x, v| x.notify_keep_history = v);
-    if p.button(rr[3 + k], "Open settings", false) {
+    if p.button(rr[3 + k], tr("Open settings"), false) {
         crate::shell::open_settings_page("ms-settings:notifications");
     }
 
     let rr = p.card(
-        Some("SYSTEM ALERTS"),
+        Some(tr("SYSTEM ALERTS")),
         &[
-            R::t("Battery alerts", "Show on the notch when the charger is plugged in or pulled, and when the battery drops to 20% and 10%."),
-            R::t("Volume on the notch", "Show the volume level on the notch when it changes. Windows still shows its own volume pop-up too."),
-            R::t("Bluetooth devices", "Show on the notch when paired headphones, a mouse or other Bluetooth device connects or disconnects."),
-            R::t("Finished downloads", "Show on the notch when a browser download finishes in your Downloads folder. Click to show the file."),
-            R::t("Caps Lock & Num Lock", "Show on the notch when Caps Lock or Num Lock is turned on or off."),
-            R::t("Camera & microphone", "Show which app starts using the camera or microphone, and keep a green (camera) or orange (mic) dot on the notch while it does."),
-            R::t("Brightness on the notch", "Show the screen brightness on the notch when it changes (laptop screens). Windows still shows its own pop-up too."),
-            R::t("Network", "Show on the notch when the PC connects to a network or goes offline."),
-            R::t("Keyboard language", "Show the new language on the notch when you switch keyboard layouts (Win+Space)."),
+            R::t(tr("Battery alerts"), tr("Show on the notch when the charger is plugged in or pulled, and when the battery drops to 20% and 10%.")),
+            R::t(tr("Volume on the notch"), tr("Show the volume level on the notch when it changes. Windows still shows its own volume pop-up too.")),
+            R::t(tr("Bluetooth devices"), tr("Show on the notch when paired headphones, a mouse or other Bluetooth device connects or disconnects.")),
+            R::t(tr("Finished downloads"), tr("Show on the notch when a browser download finishes in your Downloads folder. Click to show the file.")),
+            R::t(tr("Caps Lock & Num Lock"), tr("Show on the notch when Caps Lock or Num Lock is turned on or off.")),
+            R::t(tr("Camera & microphone"), tr("Show which app starts using the camera or microphone, and keep a green (camera) or orange (mic) dot on the notch while it does.")),
+            R::t(tr("Brightness on the notch"), tr("Show the screen brightness on the notch when it changes (laptop screens). Windows still shows its own pop-up too.")),
+            R::t(tr("Network"), tr("Show on the notch when the PC connects to a network or goes offline.")),
+            R::t(tr("Keyboard language"), tr("Show the new language on the notch when you switch keyboard layouts (Win+Space).")),
         ],
     );
     p.tog(rr[0], s.power_alerts, |x, v| x.power_alerts = v);
@@ -662,8 +668,8 @@ pub fn alerts(p: &mut Pg) {
                 (id, name)
             })
             .collect();
-        let rows: Vec<R> = apps.iter().map(|(_, n)| R::t(n.clone(), "Recently sent a notification.")).collect();
-        let rr = p.card(Some("SHOW NOTIFICATIONS FROM"), &rows);
+        let rows: Vec<R> = apps.iter().map(|(_, n)| R::t(n.clone(), tr("Recently sent a notification."))).collect();
+        let rr = p.card(Some(tr("SHOW NOTIFICATIONS FROM")), &rows);
         for (i, (id, _)) in apps.iter().enumerate() {
             let on = !s.notify_muted_apps.iter().any(|m| m.eq_ignore_ascii_case(id));
             let id = id.clone();
@@ -687,7 +693,7 @@ const HOTKEYS: [(&str, &str, &str); 3] = [
 
 pub fn keyboard(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Keyboard", "Global shortcuts work from any app. Click a shortcut, then press the new keys.");
+    p.title("Keyboard", tr("Global shortcuts work from any app. Click a shortcut, then press the new keys."));
 
     // Recording: read the keys straight from the keyboard (the global hotkeys don't reach the window).
     if let Some(action) = p.s.recording {
@@ -709,11 +715,11 @@ pub fn keyboard(p: &mut Pg) {
         .iter()
         .map(|(id, _, _)| {
             if p.s.recording == Some(*id) {
-                "Press keys…".to_string()
+                tr("Press keys…").to_string()
             } else {
                 let g = s.hotkeys.get(*id).cloned().unwrap_or_default();
                 if g.is_empty() {
-                    "Not set".to_string()
+                    tr("Not set").to_string()
                 } else {
                     g.replace('+', " + ")
                 }
@@ -722,7 +728,7 @@ pub fn keyboard(p: &mut Pg) {
         .collect();
     let widths: Vec<f32> = chips.iter().map(|c| button_w(p.ui, c, false).max(110.0) + 22.0).collect();
     let rows: Vec<R> = HOTKEYS.iter().zip(&widths).map(|((_, n, d), w)| R::c(*n, *d, *w)).collect();
-    let rr = p.card(Some("SHORTCUTS"), &rows);
+    let rr = p.card(Some(tr("SHORTCUTS")), &rows);
     for (i, (id, _, _)) in HOTKEYS.iter().enumerate() {
         let Some(r) = rr[i] else { continue };
         let (x, chip) = r.take_right(22.0, 0.0);
@@ -748,16 +754,16 @@ pub fn keyboard(p: &mut Pg) {
     let k1 = "1 – 9  ·  ← →";
     let bh = lh(11.0) + 6.0;
     let rr = p.card(
-        Some("INSIDE THE NOTCH"),
+        Some(tr("INSIDE THE NOTCH")),
         &[
-            R::new("Switch tabs", "1–9 jump to a tab; ← and → step through tabs.", p.badge_w(k1), bh),
-            R::new("Close", "Esc closes the notch (or goes back from a sub-page).", p.badge_w("Esc"), bh),
-            R::new("Teleprompter", "Space plays or pauses the script.", p.badge_w("Space"), bh),
+            R::new(tr("Switch tabs"), tr("1–9 jump to a tab; ← and → step through tabs."), p.badge_w(k1), bh),
+            R::new(tr("Close"), tr("Esc closes the notch (or goes back from a sub-page)."), p.badge_w(tr("Esc")), bh),
+            R::new("Teleprompter", tr("Space plays or pauses the script."), p.badge_w(tr("Space")), bh),
         ],
     );
     p.badge(rr[0], k1);
-    p.badge(rr[1], "Esc");
-    p.badge(rr[2], "Space");
+    p.badge(rr[1], tr("Esc"));
+    p.badge(rr[2], tr("Space"));
 }
 
 /// While recording a shortcut: Some(Some("Ctrl+Alt+N")) once a key is pressed with a modifier (F-keys alone are
@@ -812,13 +818,13 @@ fn poll_gesture() -> Option<Option<String>> {
 
 pub fn music(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Music", "Lyrics and what the notch shows while a song plays.");
+    p.title(tr("Music"), tr("Lyrics and what the notch shows while a song plays."));
     let rr = p.card(
-        Some("NOW PLAYING"),
+        Some(tr("NOW PLAYING")),
         &[
-            R::t("Lyrics", "Show time-synced lyrics on Now Playing. Songs are looked up on LRCLIB, a free lyrics library."),
-            R::t("Lyrics on the notch", "While music plays, the closed notch shows the line being sung, in time with the song, instead of the title."),
-            R::t("Announce new songs", "Pop the new song's art and title out of the notch for a moment when the track changes."),
+            R::t(tr("Lyrics"), tr("Show time-synced lyrics on Now Playing. Songs are looked up on LRCLIB, a free lyrics library.")),
+            R::t(tr("Lyrics on the notch"), tr("While music plays, the closed notch shows the line being sung, in time with the song, instead of the title.")),
+            R::t(tr("Announce new songs"), tr("Pop the new song's art and title out of the notch for a moment when the track changes.")),
         ],
     );
     p.tog(rr[0], s.lyrics_enabled, |x, v| x.lyrics_enabled = v);
@@ -857,27 +863,27 @@ webcal:// links work too. Links are stored encrypted.";
 
 pub fn calendar(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Calendar", "Event reminders on the notch and calendars you subscribe to.");
+    p.title(tr("Calendar"), tr("Event reminders on the notch and calendars you subscribe to."));
     let rr = p.card(
-        Some("REMINDERS"),
+        Some(tr("REMINDERS")),
         &[
-            R::t("Event reminders", "Show upcoming calendar events on the closed notch."),
-            R::c("Remind me", "How long before an event the reminder appears.", 170.0),
-            R::c("Keep showing", "How long the reminder stays once the event has started.", 140.0),
-            R::c("Sound", "Plays when a reminder appears and when the event starts.", 140.0),
+            R::t(tr("Event reminders"), tr("Show upcoming calendar events on the closed notch.")),
+            R::c(tr("Remind me"), tr("How long before an event the reminder appears."), 170.0),
+            R::c(tr("Keep showing"), tr("How long the reminder stays once the event has started."), 140.0),
+            R::c(tr("Sound"), tr("Plays when a reminder appears and when the event starts."), 140.0),
         ],
     );
     p.tog(rr[0], s.reminders_enabled, |x, v| x.reminders_enabled = v);
     p.pick(
         rr[1],
         "set.remlead",
-        &["5 minutes before", "10 minutes before", "15 minutes before", "30 minutes before", "1 hour before"],
+        &[tr("5 minutes before"), tr("10 minutes before"), tr("15 minutes before"), tr("30 minutes before"), tr("1 hour before")],
         &[5, 10, 15, 30, 60],
         &s.reminder_lead_min,
         0,
         |x, v| x.reminder_lead_min = v,
     );
-    p.pick(rr[2], "set.remlinger", &["1 minute", "5 minutes", "10 minutes", "15 minutes"], &[1, 5, 10, 15], &s.reminder_linger_min, 0, |x, v| {
+    p.pick(rr[2], "set.remlinger", &[tr("1 minute"), tr("5 minutes"), tr("10 minutes"), tr("15 minutes")], &[1, 5, 10, 15], &s.reminder_linger_min, 0, |x, v| {
         x.reminder_linger_min = v
     });
     let sounds: Vec<String> = SOUNDS.iter().map(|x| x.to_string()).collect();
@@ -887,25 +893,25 @@ pub fn calendar(p: &mut Pg) {
         let sh = p.s.shared.lock().unwrap();
         (sh.feeds.clone().unwrap_or_default(), sh.feed_status.clone(), sh.feed_busy)
     };
-    let rm = p.button_w("Remove");
+    let rm = p.button_w(tr("Remove"));
     let mut rows: Vec<R> =
-        feeds.iter().map(|(label, _)| R::c(label.clone(), "Read-only. Shows in Calendar, Home and reminders; refreshes every 30 minutes.", rm)).collect();
+        feeds.iter().map(|(label, _)| R::c(label.clone(), tr("Read-only. Shows in Calendar, Home and reminders; refreshes every 30 minutes."), rm)).collect();
     let add_desc = if busy {
-        "Syncing…".to_string()
+        tr("Syncing…").to_string()
     } else if !status.is_empty() {
         status
     } else {
-        "Google, Outlook or iCloud link.".to_string()
+        tr("Google, Outlook or iCloud link.").to_string()
     };
-    let add_w = p.button_w("Add");
-    let mut add = R::c("Add a calendar", add_desc, 200.0 + 6.0 + add_w + 4.0 + CTRL_H);
+    let add_w = p.button_w(tr("Add"));
+    let mut add = R::c(tr("Add a calendar"), add_desc, 200.0 + 6.0 + add_w + 4.0 + CTRL_H);
     if p.s.feed_help {
         add = add.foot_styled(ICS_HELP, 11.0, SEMIBOLD);
     }
     rows.push(add);
-    let rr = p.card(Some("SUBSCRIBED CALENDARS"), &rows);
+    let rr = p.card(Some(tr("SUBSCRIBED CALENDARS")), &rows);
     for (i, (_, link)) in feeds.iter().enumerate() {
-        if p.button(rr[i], "Remove", false) {
+        if p.button(rr[i], tr("Remove"), false) {
             calendar::remove_feed(link);
             reload_feeds(p, false);
         }
@@ -914,8 +920,8 @@ pub fn calendar(p: &mut Pg) {
         let (field, rest) = r.take_left(200.0, 6.0);
         let (btn, help) = rest.take_left(add_w, 4.0);
         let fid = id("settings.ics");
-        let mut submit = p.input("settings.ics", field, "Paste .ics link");
-        if button(p.ui, btn, "Add", false, true) {
+        let mut submit = p.input("settings.ics", field, tr("Paste .ics link"));
+        if button(p.ui, btn, tr("Add"), false, true) {
             submit = Some(p.ui.field_text(fid));
         }
         let t = p.ui.t;
@@ -940,15 +946,15 @@ pub fn calendar(p: &mut Pg) {
 
 pub fn prayer(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Prayer", "Prayer times for your city, worked out on this PC, with alerts on the notch.");
+    p.title(tr("Prayer"), tr("Prayer times for your city, worked out on this PC, with alerts on the notch."));
     let (status, busy) = {
         let sh = p.s.shared.lock().unwrap();
         (sh.prayer_status.clone(), sh.prayer_busy)
     };
     let table = if !s.prayer_enabled {
-        "Off.".to_string()
+        tr("Off.").to_string()
     } else if busy {
-        "Looking up the city…".to_string()
+        tr("Looking up the city…").to_string()
     } else if !status.is_empty() {
         status
     } else if let Some(t) = model::prayer_times() {
@@ -956,17 +962,17 @@ pub fn prayer(p: &mut Pg) {
         let parts: Vec<String> = (0..6).filter(|&i| i != 1).map(|i| format!("{} {}", prayer::NAMES[i], prayer::hhmm(list[i]))).collect();
         format!("{} · {}", model::prayer_city(), parts.join("   "))
     } else {
-        "Set a city to see today's times.".to_string()
+        tr("Set a city to see today's times.").to_string()
     };
     let rr = p.card(
-        Some("PRAYER TIMES"),
+        Some(tr("PRAYER TIMES")),
         &[
-            R::t("Prayer times", "Alert on the notch at each prayer time (Subuh, Dzuhur, Ashar, Maghrib, Isya), worked out for your city.").foot(table),
-            R::c("City", "Where the times are for. Empty uses your Weather city.", 200.0),
-            R::c("Calculation method", "The twilight angles used for Subuh and Isya. Kemenag RI matches Indonesia's official timetable.", 200.0),
-            R::c("Ashar", "Standard (Syafi'i, Maliki, Hanbali) or Hanafi, which is later.", 170.0),
-            R::c("Heads-up", "A short alert before each prayer, as well as at the time itself.", 170.0),
-            R::c("Sound", "Plays when the prayer time comes.", 140.0),
+            R::t(tr("Prayer times"), tr("Alert on the notch at each prayer time (Subuh, Dzuhur, Ashar, Maghrib, Isya), worked out for your city.")).foot(table),
+            R::c(tr("City"), tr("Where the times are for. Empty uses your Weather city."), 200.0),
+            R::c(tr("Calculation method"), tr("The twilight angles used for Subuh and Isya. Kemenag RI matches Indonesia's official timetable."), 200.0),
+            R::c(tr("Ashar"), tr("Standard (Syafi'i, Maliki, Hanbali) or Hanafi, which is later."), 170.0),
+            R::c(tr("Heads-up"), tr("A short alert before each prayer, as well as at the time itself."), 170.0),
+            R::c(tr("Sound"), tr("Plays when the prayer time comes."), 140.0),
         ],
     );
     p.tog(rr[0], s.prayer_enabled, |x, v| x.prayer_enabled = v);
@@ -990,7 +996,7 @@ pub fn prayer(p: &mut Pg) {
                         x.prayer_lon = Some(lon);
                         x.prayer_resolved_city = name;
                     }),
-                    None => g.prayer_status = format!("Couldn't find \"{city}\". Check the spelling or your connection."),
+                    None => g.prayer_status = crate::i18n::tf!("Couldn't find \"{city}\". Check the spelling or your connection.", "Kota \"{city}\" tidak ditemukan. Periksa ejaan atau koneksimu."),
                 }
             });
         }
@@ -998,11 +1004,11 @@ pub fn prayer(p: &mut Pg) {
     let names: Vec<&str> = prayer::METHODS.iter().map(|m| m.name).collect();
     let ids: Vec<String> = prayer::METHODS.iter().map(|m| m.id.to_string()).collect();
     p.pick(rr[2], "set.method", &names, &ids, &s.prayer_method, 0, |x, v| x.prayer_method = v);
-    p.pick(rr[3], "set.asr", &["Standard (Syafi'i)", "Hanafi"], &[false, true], &s.prayer_asr_hanafi, 0, |x, v| x.prayer_asr_hanafi = v);
+    p.pick(rr[3], "set.asr", &[tr("Standard (Syafi'i)"), tr("Hanafi")], &[false, true], &s.prayer_asr_hanafi, 0, |x, v| x.prayer_asr_hanafi = v);
     p.pick(
         rr[4],
         "set.prayerlead",
-        &["Only at the time", "5 minutes before", "10 minutes before", "15 minutes before", "30 minutes before"],
+        &[tr("Only at the time"), tr("5 minutes before"), tr("10 minutes before"), tr("15 minutes before"), tr("30 minutes before")],
         &[0, 5, 10, 15, 30],
         &s.prayer_lead_min,
         0,
@@ -1010,28 +1016,123 @@ pub fn prayer(p: &mut Pg) {
     );
     let sounds: Vec<String> = SOUNDS.iter().map(|x| x.to_string()).collect();
     p.pick(rr[5], "set.prayersound", &SOUNDS, &sounds, &s.prayer_sound, 0, |x, v| x.prayer_sound = v);
+
+    adzan(p, &s);
+}
+
+/// Prayer → Adzan: the call to prayer as an audio file the user picks, per prayer, with volume and a test.
+fn adzan(p: &mut Pg, s: &settings::Settings) {
+    use crate::services::adzan;
+    let file_label = |f: &str| -> String {
+        let f = f.trim();
+        if f.is_empty() {
+            tr("No file chosen").to_string()
+        } else {
+            std::path::Path::new(f).file_name().map_or_else(|| f.to_string(), |n| n.to_string_lossy().into_owned())
+        }
+    };
+    let choose_w = p.button_w("Choose…");
+    let playing = adzan::playing().is_some();
+    let test_w = p.button_w("Stop").max(p.button_w("Play"));
+    // The five prayers as chips, as wide as they need.
+    let chip_ws: Vec<f32> = adzan::PRAYERS.iter().map(|&(_, i)| p.ui.chip_w(prayer::NAMES[i], false)).collect();
+    let chips_w = chip_ws.iter().sum::<f32>() + 4.0 * (chip_ws.len() - 1) as f32;
+    let rr = p.card(
+        Some("ADZAN"),
+        &[
+            R::t("Play the adzan", "At each prayer time, the call to prayer plays instead of the sound above. Music pauses while it plays; Silent (Control) keeps it quiet."),
+            R::c("Adzan sound", format!("{} · {}", tr("An MP3, M4A or WAV of the adzan."), file_label(&s.adzan_file)), choose_w),
+            R::c(
+                "Subuh adzan",
+                format!("{} · {}", tr("Optional: Subuh's own adzan. Empty uses the one above."), file_label(&s.adzan_fajr_file)),
+                choose_w + 6.0 + 24.0,
+            ),
+            R::c("Play for", "Which prayer times get the adzan.", chips_w),
+            R::new("Volume", "How loud the adzan plays (on top of the Windows volume).", 170.0, 22.0),
+            R::c("Try it", "Play the adzan now to check the file and the volume.", test_w),
+        ],
+    );
+    p.tog(rr[0], s.adzan_enabled, |x, v| x.adzan_enabled = v);
+    if p.button(rr[1], "Choose…", false) {
+        bg::spawn(|| {
+            if let Some(f) = crate::services::player::pick_file(tr("Choose the adzan")) {
+                settings::update(|x| x.adzan_file = f);
+            }
+        });
+    }
+    if let Some(r) = rr[2] {
+        let (b, rest) = r.take_left(choose_w, 6.0);
+        if button(p.ui, b, "Choose…", false, true) {
+            bg::spawn(|| {
+                if let Some(f) = crate::services::player::pick_file(tr("Choose the Subuh adzan")) {
+                    settings::update(|x| x.adzan_fajr_file = f);
+                }
+            });
+        }
+        if small_icon(p.ui, Rect::new(rest.x, rest.cy() - 11.0, 22.0, 22.0), "XMark", !s.adzan_fajr_file.trim().is_empty()) {
+            settings::update(|x| x.adzan_fajr_file.clear());
+        }
+    }
+    if let Some(r) = rr[3] {
+        let mut x = r.x;
+        for (&(pid, i), w) in adzan::PRAYERS.iter().zip(&chip_ws) {
+            let on = s.adzan_prayers.iter().any(|q| q == pid);
+            if p.ui.chip(Rect::new(x, r.y, *w, r.h), prayer::NAMES[i], on, None) {
+                settings::update(|st| {
+                    if on {
+                        st.adzan_prayers.retain(|q| q != pid);
+                    } else {
+                        st.adzan_prayers.push(pid.to_string());
+                    }
+                });
+            }
+            x += w + 4.0;
+        }
+    }
+    if let Some(r) = rr[4] {
+        if let Some(v) = p.ui.slider(id("settings.adzanvol"), r.inset(8.0, 0.0), s.adzan_volume as f32) {
+            let v = (v as f64 * 100.0).round() / 100.0;
+            settings::update_quiet(|x| x.adzan_volume = v);
+            adzan::set_volume(v);
+        }
+    }
+    if let Some(r) = rr[5] {
+        let file = adzan::file_for("dhuhr");
+        if button(p.ui, r, if playing { "Stop" } else { "Play" }, !playing, playing || file.is_some()) {
+            if playing {
+                bg::spawn(adzan::stop);
+            } else if let Some(f) = file {
+                bg::spawn(move || {
+                    adzan::play_file(&f, "");
+                });
+            }
+        }
+    }
+    if s.adzan_enabled && s.adzan_file.trim().is_empty() {
+        p.hint("Choose an adzan file above; until then the prayer sound plays.", true);
+    }
 }
 
 // ---------------------------------------------------------------- To-dos
 
 pub fn todos(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("To-Dos", "Keep your to-dos in step with TickTick: add, tick off, star or delete on either side.");
+    p.title(tr("To-Dos"), tr("Keep your to-dos in step with TickTick: add, tick off, star or delete on either side."));
     let rr = p.card(
-        Some("NEW TO-DOS"),
-        &[R::c("Due date", "What a new to-do starts with. Change it per to-do with the date chip next to the box.", 140.0)],
+        Some(tr("NEW TO-DOS")),
+        &[R::c(tr("Due date"), tr("What a new to-do starts with. Change it per to-do with the date chip next to the box."), 140.0)],
     );
     let dues = ["today".to_string(), "none".into()];
-    p.pick(rr[0], "set.due", &["Today", "No date"], &dues, &s.todo_default_due, 0, |x, v| x.todo_default_due = v);
+    p.pick(rr[0], "set.due", &[tr("Today"), tr("No date")], &dues, &s.todo_default_due, 0, |x, v| x.todo_default_due = v);
 
     let has = p.s.facts.has_token;
-    let save_w = button_w(p.ui, "Save", true);
+    let save_w = button_w(p.ui, tr("Save"), true);
     let token_desc = if has {
-        "Saved and encrypted for your Windows account. Paste a new token to replace it."
+        tr("Saved and encrypted for your Windows account. Paste a new token to replace it.")
     } else {
-        "In TickTick on the web: your avatar → Settings → Account → API Token → create and copy it. It's stored encrypted on this PC."
+        tr("In TickTick on the web: your avatar → Settings → Account → API Token → create and copy it. It's stored encrypted on this PC.")
     };
-    let mut rows = vec![R::c("API token", token_desc, 200.0 + 6.0 + save_w)];
+    let mut rows = vec![R::c(tr("API token"), token_desc, 200.0 + 6.0 + save_w)];
     let sh = p.shared();
     let (projects, loading, error, syncing) = {
         let g = sh.lock().unwrap();
@@ -1039,19 +1140,19 @@ pub fn todos(p: &mut Pg) {
     };
     if has {
         let status = ticktick::status();
-        rows.push(R::t("Sync with TickTick", if status.is_empty() { "Every few minutes, and whenever you change something.".to_string() } else { status }));
-        rows.push(R::c("List", "Which TickTick list the To-Dos tab shows. New to-dos go there too.", 200.0));
+        rows.push(R::t(tr("Sync with TickTick"), if status.is_empty() { tr("Every few minutes, and whenever you change something.").to_string() } else { status }));
+        rows.push(R::c(tr("List"), tr("Which TickTick list the To-Dos tab shows. New to-dos go there too."), 200.0));
         let st = ticktick::status();
-        let last = st.strip_prefix("Synced ").map(|t| format!("Last synced at {t}."));
-        let sync_desc = if syncing { "Syncing…".to_string() } else { last.unwrap_or_else(|| "Not synced yet.".into()) };
-        rows.push(R::c("Sync now", sync_desc, p.button_w("Sync now")));
-        rows.push(R::c("Forget token", "Stop syncing and delete the saved token from this PC. Your to-dos stay in both places.", p.button_w("Remove")));
+        let last = st.strip_prefix("Synced ").map(|t| crate::i18n::tf!("Last synced at {t}.", "Terakhir disinkronkan {t}."));
+        let sync_desc = if syncing { tr("Syncing…").to_string() } else { last.unwrap_or_else(|| tr("Not synced yet.").into()) };
+        rows.push(R::c(tr("Sync now"), sync_desc, p.button_w(tr("Sync now"))));
+        rows.push(R::c(tr("Forget token"), tr("Stop syncing and delete the saved token from this PC. Your to-dos stay in both places."), p.button_w(tr("Remove"))));
     }
-    let rr = p.card(Some("TICKTICK"), &rows);
+    let rr = p.card(Some(tr("TICKTICK")), &rows);
     if let Some(r) = rr[0] {
         let (field, btn) = r.take_left(200.0, 6.0);
-        let mut submit = p.secret(field, if has { "••••••••  saved" } else { "Paste your TickTick API token" });
-        if button(p.ui, btn, "Save", true, true) && !p.s.token.trim().is_empty() {
+        let mut submit = p.secret(field, if has { tr("••••••••  saved") } else { tr("Paste your TickTick API token") });
+        if button(p.ui, btn, tr("Save"), true, true) && !p.s.token.trim().is_empty() {
             submit = Some(std::mem::take(&mut p.s.token).trim().to_string());
         }
         if let Some(tok) = submit {
@@ -1113,10 +1214,10 @@ pub fn todos(p: &mut Pg) {
     }
     if let Some(e) = error {
         let _ = e;
-        p.hint("TickTick refused the token. Paste a new one above.", true);
+        p.hint(tr("TickTick refused the token. Paste a new one above."), true);
     }
     if let Some(r) = rr[3] {
-        if button(p.ui, r, "Sync now", false, !syncing) {
+        if button(p.ui, r, tr("Sync now"), false, !syncing) {
             sh.lock().unwrap().tick_syncing = true;
             let sh = sh.clone();
             bg::spawn(move || {
@@ -1125,7 +1226,7 @@ pub fn todos(p: &mut Pg) {
             });
         }
     }
-    if p.button(rr[4], "Remove", false) {
+    if p.button(rr[4], tr("Remove"), false) {
         settings::set_ticktick_token(None);
         p.s.facts.has_token = false;
         settings::update(|x| x.ticktick_enabled = false);
@@ -1139,51 +1240,51 @@ pub fn todos(p: &mut Pg) {
 
 pub fn data(p: &mut Pg) {
     let s = p.st.clone();
-    p.title("Clipboard & Shelf", "History and dropped files are stored only on this PC.");
+    p.title(tr("Clipboard & Shelf"), tr("History and dropped files are stored only on this PC."));
     let rr = p.card(
-        Some("CLIPBOARD"),
+        Some(tr("CLIPBOARD")),
         &[
-            R::t("Record history", "Keep a list of what you copy."),
-            R::t("Skip private clips", "Ignore copies that password managers mark as sensitive."),
-            R::c("Keep up to", "Older unpinned clips are removed.", 140.0),
-            R::c("Clear history", "Pinned clips are kept.", p.button_w("Clear history")),
+            R::t(tr("Record history"), tr("Keep a list of what you copy.")),
+            R::t(tr("Skip private clips"), tr("Ignore copies that password managers mark as sensitive.")),
+            R::c(tr("Keep up to"), tr("Older unpinned clips are removed."), 140.0),
+            R::c(tr("Clear history"), tr("Pinned clips are kept."), p.button_w(tr("Clear history"))),
         ],
     );
     p.tog(rr[0], s.clipboard_enabled, |x, v| x.clipboard_enabled = v);
     p.tog(rr[1], s.clipboard_skip_sensitive, |x, v| x.clipboard_skip_sensitive = v);
-    p.pick(rr[2], "set.clipmax", &["50 items", "100 items", "200 items", "500 items"], &[50, 100, 200, 500], &s.clipboard_max_items, 0, |x, v| {
+    p.pick(rr[2], "set.clipmax", &[tr("50 items"), tr("100 items"), tr("200 items"), tr("500 items")], &[50, 100, 200, 500], &s.clipboard_max_items, 0, |x, v| {
         x.clipboard_max_items = v
     });
-    if p.button(rr[3], "Clear history", false) {
+    if p.button(rr[3], tr("Clear history"), false) {
         bg::spawn(cliphistory::clear);
     }
 
-    let rr = p.card(Some("SHELF"), &[R::c("Remove items after", "Files you drop on the notch are forgotten after this long.", 140.0)]);
-    p.pick(rr[0], "set.shelf", &["1 day", "3 days", "7 days", "30 days", "Never"], &[1, 3, 7, 30, 0], &s.shelf_retention_days, 0, |x, v| {
+    let rr = p.card(Some(tr("SHELF")), &[R::c(tr("Remove items after"), tr("Files you drop on the notch are forgotten after this long."), 140.0)]);
+    p.pick(rr[0], "set.shelf", &[tr("1 day"), tr("3 days"), tr("7 days"), tr("30 days"), tr("Never")], &[1, 3, 7, 30, 0], &s.shelf_retention_days, 0, |x, v| {
         x.shelf_retention_days = v
     });
 
     let folder = phone::receive_folder().to_string_lossy().into_owned();
     let rr = p.card(
-        Some("PHONE TRANSFER"),
+        Some(tr("PHONE TRANSFER")),
         &[
-            R::t("Phone transfer", "Send files with phones on the same Wi-Fi: scan a QR code, no app needed."),
-            R::c("Save received files in", folder.clone(), p.button_w("Change…")),
+            R::t(tr("Phone transfer"), tr("Send files with phones on the same Wi-Fi: scan a QR code, no app needed.")),
+            R::c(tr("Save received files in"), folder.clone(), p.button_w(tr("Change…"))),
         ],
     );
     if p.tog(rr[0], s.phone_enabled, |x, v| x.phone_enabled = v) {
         bg::spawn(phone::sync);
     }
-    if p.button(rr[1], "Change…", false) {
+    if p.button(rr[1], tr("Change…"), false) {
         bg::spawn(move || {
-            if let Some(dir) = pick_folder("Save received files in", &folder) {
+            if let Some(dir) = pick_folder(tr("Save received files in"), &folder) {
                 settings::update(|x| x.phone_receive_folder = dir);
             }
         });
     }
 
-    let rr = p.card(Some("TIMERS"), &[R::c("Break length", "Pomodoro break after each focus session.", 140.0)]);
-    p.pick(rr[0], "set.break", &["3 minutes", "5 minutes", "10 minutes", "15 minutes"], &[3, 5, 10, 15], &s.pomodoro_break_min, 0, |x, v| {
+    let rr = p.card(Some(tr("TIMERS")), &[R::c(tr("Break length"), tr("Pomodoro break after each focus session."), 140.0)]);
+    p.pick(rr[0], "set.break", &[tr("3 minutes"), tr("5 minutes"), tr("10 minutes"), tr("15 minutes")], &[3, 5, 10, 15], &s.pomodoro_break_min, 0, |x, v| {
         x.pomodoro_break_min = v
     });
 }
@@ -1229,7 +1330,7 @@ fn pick_folder(title: &str, start: &str) -> Option<String> {
 
 pub fn about(p: &mut Pg) {
     let version = env!("CARGO_PKG_VERSION");
-    p.title("About", "Version, privacy and where your data lives.");
+    p.title(tr("About"), tr("Version, privacy and where your data lives."));
     if !p.free() {
         return;
     }
@@ -1237,7 +1338,7 @@ pub fn about(p: &mut Pg) {
 
     // Hero: logo tile, wordmark, tagline, chips, update button (18 padding, 18 radius, 16 above).
     p.y += 16.0;
-    let tag = "Your screen, smarter — a dynamic-island toolbox for Windows.";
+    let tag = tr("Your screen, smarter — a dynamic-island toolbox for Windows.");
     let info_x = p.x + 18.0 + 72.0 + 16.0;
     let info_w = p.x + p.w - 18.0 - info_x;
     let tag_lines = wrap_lines(p.ui, tag, 12.0, REGULAR, info_w);
@@ -1259,7 +1360,7 @@ pub fn about(p: &mut Pg) {
     }
     y += 9.0;
     let mut cx = info_x;
-    for (i, chip) in [format!("Version {version}"), "Windows · x64".to_string(), "Rust".to_string()].iter().enumerate() {
+    for (i, chip) in [crate::i18n::tf!("Version {version}", "Versi {version}"), tr("Windows · x64").to_string(), tr("Rust").to_string()].iter().enumerate() {
         let w = p.ui.measure(chip, 11.0, SEMIBOLD).ceil() + 18.0;
         let r = Rect::new(cx, y, w, lh(11.0) + 6.0);
         p.ui.fill(r, 9.0, if i == 0 { t.accent_soft } else { t.surface2 });
@@ -1268,7 +1369,7 @@ pub fn about(p: &mut Pg) {
     }
     y += lh(11.0) + 6.0 + 4.0 + 8.0 + 4.0;
     // No update feed in this build: the .NET build shows the button disabled with this text.
-    let label = "No update feed yet";
+    let label = tr("No update feed yet");
     let w = p.ui.measure(label, 13.0, MEDIUM).ceil() + 28.0 + 19.0;
     let b = Rect::new(info_x, y, w, CTRL_H);
     p.ui.fill(b, 8.0, with_alpha(t.surface2, 0.35));
@@ -1276,34 +1377,34 @@ pub fn about(p: &mut Pg) {
     p.ui.text(label, Rect::new(b.x + 14.0 + 19.0, b.y, w - 33.0, b.h), 13.0, MEDIUM, with_alpha(t.text, 0.35), Align::Left);
     p.y = hero.bottom();
 
-    let open_w = p.button_w("Open");
+    let open_w = p.button_w(tr("Open"));
     let log = p.s.shared.lock().unwrap().log_exists;
     let mut rows: Vec<(&str, String, f32)> = vec![
-        ("Version", version.to_string(), 0.0),
-        ("Runtime", "Rust · native Windows build".to_string(), 0.0),
-        ("System", p.s.facts.windows.clone(), 0.0),
-        ("Data folder", "Settings, notes, history and keys".to_string(), open_w),
+        (tr("Version"), version.to_string(), 0.0),
+        (tr("Runtime"), tr("Rust · native Windows build").to_string(), 0.0),
+        (tr("System"), p.s.facts.windows.clone(), 0.0),
+        (tr("Data folder"), tr("Settings, notes, history and keys").to_string(), open_w),
     ];
     if log {
-        rows.push(("Error log", "Useful when reporting an issue".to_string(), open_w));
+        rows.push((tr("Error log"), tr("Useful when reporting an issue").to_string(), open_w));
     }
-    let ctl = p.info_card("DETAILS", &rows);
-    if button(p.ui, ctl[3], "Open", false, true) {
+    let ctl = p.info_card(tr("DETAILS"), &rows);
+    if button(p.ui, ctl[3], tr("Open"), false, true) {
         crate::shell::open(&store::root().to_string_lossy());
     }
-    if log && button(p.ui, ctl[4], "Open", false, true) {
+    if log && button(p.ui, ctl[4], tr("Open"), false, true) {
         crate::shell::open(&store::path("error.log").to_string_lossy());
     }
 
     // Privacy.
-    p.caption("PRIVACY");
+    p.caption(tr("PRIVACY"));
     let items = [
-        ("Cloud", "Weather", "Open-Meteo — the city you search"),
-        ("MusicNote", "Lyrics", "LRCLIB — the title and artist playing"),
-        ("Moon", "Prayer times", "Open-Meteo — your prayer city, looked up once; times are computed on this PC"),
+        ("Cloud", tr("Weather"), tr("Open-Meteo — the city you search")),
+        ("MusicNote", tr("Lyrics"), tr("LRCLIB — the title and artist playing")),
+        ("Moon", tr("Prayer times"), tr("Open-Meteo — your prayer city, looked up once; times are computed on this PC")),
     ];
-    let intro = "Everything stays on this PC. These tools go online only while you use them:";
-    let outro = "API keys are encrypted with Windows DPAPI and only ever sent to their own provider.";
+    let intro = tr("Everything stays on this PC. These tools go online only while you use them:");
+    let outro = tr("API keys are encrypted with Windows DPAPI and only ever sent to their own provider.");
     let tw = p.w - 32.0;
     let intro_lines = wrap_lines(p.ui, intro, 12.0, REGULAR, tw);
     let outro_lines = wrap_lines(p.ui, outro, 11.0, REGULAR, tw);
@@ -1342,19 +1443,19 @@ pub fn about(p: &mut Pg) {
     p.y = card.bottom();
 
     let _ = p.info_card(
-        "CREDITS",
-        &[("Heroicons", "Interface icons · MIT".to_string(), 0.0), ("Open-Meteo · LRCLIB", "Free weather and lyrics data".to_string(), 0.0)],
+        tr("CREDITS"),
+        &[(tr("Heroicons"), tr("Interface icons · MIT").to_string(), 0.0), (tr("Open-Meteo · LRCLIB"), tr("Free weather and lyrics data").to_string(), 0.0)],
     );
 
     // Footer: copyright on the left, quit on the right.
     p.y += 18.0;
     let n = crate::notch::now();
-    let qw = p.button_w("Quit FathNotch");
+    let qw = p.button_w(tr("Quit FathNotch"));
     let q = Rect::new(p.x + p.w - qw, p.y, qw, CTRL_H);
     p.ui.text(&format!("© {} FathNotch", n.year), Rect::new(p.x + 4.0, p.y, 200.0, CTRL_H), 11.0, REGULAR, t.subtext, Align::Left);
     let hov = p.ui.hovered(q);
     p.ui.fill(q, 8.0, with_alpha(t.surface2, if hov { 0.85 } else { 1.0 }));
-    p.ui.text("Quit FathNotch", q, 13.0, MEDIUM, t.danger, Align::Center);
+    p.ui.text(tr("Quit FathNotch"), q, 13.0, MEDIUM, t.danger, Align::Center);
     if p.ui.clicked(q) {
         unsafe { windows::Win32::UI::WindowsAndMessaging::PostQuitMessage(0) };
     }
@@ -1395,6 +1496,6 @@ pub(super) fn windows_name() -> String {
     unsafe {
         RtlGetVersion(&mut info);
     }
-    let name = if info.dwMajorVersion == 10 && info.dwBuildNumber >= 22000 { "Windows 11".to_string() } else { format!("Windows {}", info.dwMajorVersion) };
+    let name = if info.dwMajorVersion == 10 && info.dwBuildNumber >= 22000 { tr("Windows 11").to_string() } else { format!("Windows {}", info.dwMajorVersion) };
     format!("{name} · build {}", info.dwBuildNumber)
 }

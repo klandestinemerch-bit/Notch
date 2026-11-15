@@ -12,6 +12,7 @@ mod pages;
 use std::sync::{Arc, Mutex};
 
 use crate::gfx::{with_alpha, Align, BOLD, MEDIUM, REGULAR, SEMIBOLD};
+use crate::i18n::tr;
 use crate::services::settings::{self, Settings};
 use crate::ui::{id, Key, Rect, Ui};
 
@@ -260,7 +261,7 @@ fn draw_nav(ui: &mut Ui, s: &mut State, r: Rect) {
     ui.icon("Magnifier", sr.x + 18.5, sr.cy(), 15.0, t.subtext);
     let has_text = !ui.field_text(SEARCH_ID).is_empty();
     let text_r = sr.pad(36.0, 0.0, if has_text { 32.0 } else { 10.0 }, 0.0);
-    if let Some(v) = ui.text_field(SEARCH_ID, text_r, "Search settings", 13.0) {
+    if let Some(v) = ui.text_field(SEARCH_ID, text_r, tr("Search settings"), 13.0) {
         ui.set_field_text(SEARCH_ID, &v); // Enter keeps the query
     }
     if has_text {
@@ -296,7 +297,7 @@ fn draw_nav(ui: &mut Ui, s: &mut State, r: Rect) {
                 y += 8.0 + 4.0;
             } else {
                 y += 14.0;
-                ui.text(c, Rect::new(list.x + 10.0, y, list.w - 10.0, 14.0), 11.0, BOLD, t.subtext, Align::Left);
+                ui.text(tr(c), Rect::new(list.x + 10.0, y, list.w - 10.0, 14.0), 11.0, BOLD, t.subtext, Align::Left);
                 y += 14.0 + 4.0;
             }
         }
@@ -311,7 +312,7 @@ fn draw_nav(ui: &mut Ui, s: &mut State, r: Rect) {
         }
         let fg = if selected || hov { t.text } else { t.subtext };
         ui.icon(pg.icon, row.x + 12.0 + 7.5, row.cy(), 15.0, fg);
-        ui.text(pg.name, Rect::new(row.x + 37.0, row.y, row.w - 41.0, row.h), 13.0, SEMIBOLD, fg, Align::Left);
+        ui.text(tr(pg.name), Rect::new(row.x + 37.0, row.y, row.w - 41.0, row.h), 13.0, SEMIBOLD, fg, Align::Left);
         if ui.clicked(row) {
             clicked = Some(i);
         }
@@ -367,7 +368,7 @@ pub(super) fn switch(ui: &mut Ui, r: Rect, on: bool) -> bool {
 
 /// Width of a default button for `label` (13 Medium, 14 padding each side).
 pub(super) fn button_w(ui: &Ui, label: &str, accent: bool) -> f32 {
-    ui.measure(label, 13.0, if accent { SEMIBOLD } else { MEDIUM }).ceil() + 28.0
+    ui.measure(tr(label), 13.0, if accent { SEMIBOLD } else { MEDIUM }).ceil() + 28.0
 }
 
 /// Default (Surface2) or accent button, 8 radius; hover dims it a little; disabled at 35 %.
@@ -378,7 +379,7 @@ pub(super) fn button(ui: &mut Ui, r: Rect, label: &str, accent: bool, enabled: b
     let a = if !enabled { 0.35 } else if pressed { 0.65 } else if hov { 0.85 } else { 1.0 };
     let (bg, fg) = if accent { (t.accent, t.on_accent) } else { (t.surface2, t.text) };
     ui.fill(r, 8.0, with_alpha(bg, a));
-    ui.text(label, r, 13.0, if accent { SEMIBOLD } else { MEDIUM }, with_alpha(fg, if enabled { 1.0 } else { 0.35 }), Align::Center);
+    ui.text(tr(label), r, 13.0, if accent { SEMIBOLD } else { MEDIUM }, with_alpha(fg, if enabled { 1.0 } else { 0.35 }), Align::Center);
     enabled && ui.clicked(r)
 }
 
@@ -470,6 +471,7 @@ impl Pg<'_, '_> {
         if !self.free() {
             return;
         }
+        let (title, subtitle) = (tr(title), tr(subtitle));
         let t = self.ui.t;
         let icon = PAGES.iter().find(|p| p.name == self.page_name).map_or("Gear", |p| p.icon);
         let tx = self.x + 52.0;
@@ -493,6 +495,7 @@ impl Pg<'_, '_> {
 
     /// Section caption (Caps, 10.5 bold; 22 above, 8 below).
     pub fn caption(&mut self, text: &str) {
+        let text = tr(text);
         let sub = self.ui.t.subtext;
         self.y += 22.0;
         self.ui.text(text, Rect::new(self.x + 6.0, self.y, self.w, 14.0), 11.0, BOLD, sub, Align::Left);
@@ -505,7 +508,7 @@ impl Pg<'_, '_> {
             return;
         }
         let c = if bad { self.ui.t.danger } else { self.ui.t.subtext };
-        let lines = wrap_lines(self.ui, text, 10.0, SEMIBOLD, self.w - 2.0);
+        let lines = wrap_lines(self.ui, tr(text), 10.0, SEMIBOLD, self.w - 2.0);
         self.y += 6.0;
         for l in &lines {
             self.ui.text(l, Rect::new(self.x + 2.0, self.y, self.w - 2.0, lh(10.0)), 10.0, SEMIBOLD, c, Align::Left);
@@ -533,7 +536,7 @@ impl Pg<'_, '_> {
             self.first_header = false;
             self.last_header_page = self.page_name;
             let t = self.ui.t;
-            self.ui.text(self.page_name, Rect::new(self.x, self.y, self.w, lh(17.0)), 17.0, BOLD, t.text, Align::Left);
+            self.ui.text(tr(self.page_name), Rect::new(self.x, self.y, self.w, lh(17.0)), 17.0, BOLD, t.text, Align::Left);
             self.y += lh(17.0);
         }
     }
@@ -541,6 +544,18 @@ impl Pg<'_, '_> {
     /// A card of rows under an optional caption. Returns each row's control rectangle (None when the row is
     /// filtered out by the search, or scrolled out of sight).
     pub fn card(&mut self, caption: Option<&str>, rows: &[R]) -> Vec<Option<Rect>> {
+        // In the interface language (searching matches what's shown).
+        let rows: Vec<R> = rows
+            .iter()
+            .map(|r| R {
+                title: tr(&r.title).to_string(),
+                desc: tr(&r.desc).to_string(),
+                cw: r.cw,
+                ch: r.ch,
+                foot: r.foot.as_ref().map(|(f, size, weight)| (tr(f).to_string(), *size, *weight)),
+            })
+            .collect();
+        let rows = &rows[..];
         let shown: Vec<bool> = rows.iter().map(|r| self.matches(r)).collect();
         if !shown.iter().any(|&b| b) {
             return vec![None; rows.len()];
@@ -639,12 +654,13 @@ impl Pg<'_, '_> {
         let t = self.ui.t;
         let pad = 16.0;
         let row_h = 42.0;
+        let rows: Vec<(&str, &String, &f32)> = rows.iter().map(|(l, v, w)| (tr(l), v, w)).collect();
         let h = 4.0 + rows.len() as f32 * row_h + (rows.len().saturating_sub(1)) as f32;
         let card = Rect::new(self.x, self.y, self.w, h);
         self.ui.fill(card, 16.0, t.surface);
         let mut y = card.y + 2.0;
         let mut out = Vec::new();
-        for (i, (label, value, cw)) in rows.iter().enumerate() {
+        for (i, &(label, value, cw)) in rows.iter().enumerate() {
             if i > 0 {
                 self.ui.fill(Rect::new(card.x + pad, y, card.w - 2.0 * pad, 1.0), 0.0, t.stroke);
                 y += 1.0;
@@ -706,6 +722,8 @@ impl Pg<'_, '_> {
 
     pub fn combo_enabled(&mut self, key: &str, r: Rect, labels: &[&str], sel: usize, enabled: bool) -> Option<usize> {
         let cid = id(key);
+        let labels: Vec<&str> = labels.iter().map(|l| tr(l)).collect();
+        let labels = &labels[..];
         let t = self.ui.t;
         let open = self.s.combo_open == cid;
         let hov = enabled && self.ui.hovered(r);
@@ -773,7 +791,7 @@ impl Pg<'_, '_> {
         let clip = intersect(inner, self.view);
         self.ui.push_clip(clip);
         let before = self.ui.field_text(fid);
-        let sub = self.ui.text_field(fid, inner, placeholder, 13.0);
+        let sub = self.ui.text_field(fid, inner, tr(placeholder), 13.0);
         self.ui.pop_clip();
         if error && self.ui.field_text(fid) != before {
             self.s.field_error = None;
@@ -800,7 +818,7 @@ impl Pg<'_, '_> {
         let clip = intersect(inner, self.view);
         self.ui.push_clip(clip);
         let before = self.ui.field_text(fid);
-        let sub = self.ui.text_field(fid, inner, placeholder, 13.0);
+        let sub = self.ui.text_field(fid, inner, tr(placeholder), 13.0);
         self.ui.pop_clip();
         if let Some(v) = &sub {
             self.ui.set_field_text(fid, v); // the kit clears on Enter; keep it until it's accepted
@@ -849,7 +867,7 @@ impl Pg<'_, '_> {
         let inner = r.pad(12.0, 0.0, 10.0, 0.0);
         let n = self.s.token.chars().count().min(40);
         if n == 0 {
-            self.ui.text(placeholder, inner, 13.0, REGULAR, t.subtext, Align::Left);
+            self.ui.text(tr(placeholder), inner, 13.0, REGULAR, t.subtext, Align::Left);
         } else {
             let dots: String = "•".repeat(n);
             self.ui.text(&dots, inner, 13.0, REGULAR, t.text, Align::Left);

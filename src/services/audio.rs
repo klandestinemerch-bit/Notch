@@ -29,6 +29,7 @@ use windows::Win32::System::Com::{
 };
 use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
 use windows::Win32::UI::Shell::PropertiesSystem::PROPERTYKEY;
+use crate::i18n::tr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Device {
@@ -170,7 +171,7 @@ pub fn devices(input: bool) -> Vec<Device> {
             let name = friendly_name(&device);
             Some(Device {
                 is_default: Some(&id) == default_id.as_ref(),
-                name: if name.is_empty() { "Audio device".into() } else { name },
+                name: if name.is_empty() { tr("Audio device").into() } else { name },
                 id,
             })
         })
@@ -266,7 +267,7 @@ pub fn sessions() -> Vec<AppSession> {
         let (volume, muted) = unsafe {
             (simple.GetMasterVolume().unwrap_or(1.0), simple.GetMute().map(|m| m.as_bool()).unwrap_or(false))
         };
-        let name = if raw.system { "System sounds".to_string() } else { app_name(raw.pid, &raw.control) };
+        let name = if raw.system { tr("System sounds").to_string() } else { app_name(raw.pid, &raw.control) };
         by_pid.insert(raw.pid, (AppSession { pid: raw.pid, name, volume, muted, active: raw.active }, raw.system, raw.active));
     }
     // One row per app: a browser and its helper processes (WebView, renderers) share a name.

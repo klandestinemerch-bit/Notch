@@ -4,17 +4,16 @@
 //! panel over the list: quick picks, the next 14 days, a time (clock-face picker) and the priority.
 
 use crate::gfx::{color, mix, with_alpha, Align, BOLD, REGULAR, SEMIBOLD};
-use crate::notch::DAYS;
 use crate::services::todos::{self, civil_from_days, days_from_civil, local_now_secs, DueInput, Todo};
 use crate::services::{settings, ticktick};
 use crate::ui::{id, Key, Rect, Ui};
 
 use super::picker;
+use crate::i18n::tr;
 
 const RED: u32 = 0xFF5A5F;
 const AMBER: u32 = 0xFFB800;
 const BLUE: u32 = 0x4C8DFF;
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 enum Filter {
@@ -89,15 +88,15 @@ fn dow(days: i64) -> usize {
 
 /// "Today", "Tomorrow", "Mon 16 Nov", with " 09:30" when timed; "No date" without one.
 fn describe(due: Option<DueInput>) -> String {
-    let Some(d) = due else { return "No date".into() };
+    let Some(d) = due else { return tr("No date").into() };
     let days = days_of(&d);
     let today = today_days();
     let day = if days == today {
-        "Today".to_string()
+        tr("Today").to_string()
     } else if days == today + 1 {
-        "Tomorrow".to_string()
+        tr("Tomorrow").to_string()
     } else {
-        format!("{} {} {}", &DAYS[dow(days)][..3], d.2, MONTHS[d.1 as usize - 1])
+        format!("{} {} {}", crate::i18n::day3(dow(days)), d.2, crate::i18n::month3(d.1 as usize))
     };
     match d.3 {
         Some((h, m)) => format!("{day} {h:02}:{m:02}"),
@@ -177,22 +176,22 @@ fn sidebar(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
         ui.g.arc(cx, cy, 14.5, 0.0, frac.min(0.9999) * std::f32::consts::TAU, ui.c(t.accent), 3.0);
     }
     let title = if items.is_empty() {
-        "No to-dos".to_string()
+        tr("No to-dos").to_string()
     } else if open == 0 {
-        "All done".to_string()
+        tr("All done").to_string()
     } else {
-        format!("{open} to go")
+        crate::i18n::tf!("{open} to go", "{open} lagi")
     };
-    let sub = if items.is_empty() { "Add one on the right".to_string() } else { format!("{done} of {} completed", items.len()) };
+    let sub = if items.is_empty() { tr("Add one on the right").to_string() } else { crate::i18n::tf!("{done} of {} completed", "{done} dari {} selesai", items.len()) };
     let tx = r.x + 2.0 + 34.0 + 9.0;
     ui.text(&title, Rect::new(tx, r.y, r.right() - tx, 18.0), 13.0, SEMIBOLD, t.text, Align::Left);
     ui.text(&sub, Rect::new(tx, r.y + 17.0, r.right() - tx, 15.0), 11.0, REGULAR, t.subtext, Align::Left);
 
     // Filters.
     let rows = [
-        (Filter::Open, "ListBullet", "To do", open),
-        (Filter::Starred, "Star", "Important", starred),
-        (Filter::Done, "Check", "Completed", done),
+        (Filter::Open, "ListBullet", tr("To do"), open),
+        (Filter::Starred, "Star", tr("Important"), starred),
+        (Filter::Done, "Check", tr("Completed"), done),
     ];
     for (i, (f, icon, label, count)) in rows.into_iter().enumerate() {
         let row = Rect::new(r.x, r.y + 42.0 + i as f32 * 35.0, r.w, 32.0);
@@ -260,9 +259,9 @@ fn main_column(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     let plus = Rect::new(comp.right() - 4.0 - 30.0, comp.cy() - 15.0, 30.0, 30.0);
     let label = describe(s.new_due)
         + match s.new_priority {
-            5 => " · High",
-            3 => " · Medium",
-            1 => " · Low",
+            5 => tr(" · High"),
+            3 => tr(" · Medium"),
+            1 => tr(" · Low"),
             _ => "",
         };
     // The chip sits in a row button (8, 5 padding, Surface2 on hover).
@@ -278,7 +277,7 @@ fn main_column(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     }
     let field_id = id("todos.input");
     let field = Rect::new(comp.x + 12.0, comp.y, chip.x - comp.x - 24.0, comp.h);
-    let submitted = ui.text_field(field_id, field, "Add a to-do, press Enter", 13.0);
+    let submitted = ui.text_field(field_id, field, tr("Add a to-do, press Enter"), 13.0);
     let mut add_text = submitted;
     if ui.icon_button(plus, "Plus", 15.0, t.accent) {
         let typed = ui.field_text(field_id);
@@ -314,10 +313,10 @@ fn main_column(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     let list = Rect::new(r.x, comp.bottom() + 8.0, r.w, r.bottom() - comp.bottom() - 8.0);
     if shown.is_empty() {
         let (icon, text) = match s.filter {
-            Filter::Starred => ("Star", "Nothing marked important"),
-            Filter::Done => ("Check", "Nothing completed yet"),
-            Filter::Open if items.is_empty() => ("ListBullet", "Nothing to do yet"),
-            Filter::Open => ("Check", "All done. Nice!"),
+            Filter::Starred => ("Star", tr("Nothing marked important")),
+            Filter::Done => ("Check", tr("Nothing completed yet")),
+            Filter::Open if items.is_empty() => ("ListBullet", tr("Nothing to do yet")),
+            Filter::Open => ("Check", tr("All done. Nice!")),
         };
         let cy = list.cy();
         ui.icon(icon, list.cx(), cy - 12.0, 22.0, with_alpha(t.subtext, 0.6));
@@ -465,7 +464,7 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     }
     let (due, priority, title) = match &item {
         Some(i) => (item_due(i), i.tick_priority, i.text.clone()),
-        None => (s.new_due, s.new_priority, "New to-do".to_string()),
+        None => (s.new_due, s.new_priority, tr("New to-do").to_string()),
     };
 
     ui.fill(r, 12.0, t.surface);
@@ -473,7 +472,7 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     let inner = r.pad(12.0, 8.0, 12.0, 10.0);
 
     if let Some(mut c) = s.clock {
-        let picked = picker::dial(ui, &mut c, Rect::new(inner.x, inner.y + 4.0, inner.w, inner.h - 4.0), Some("All day"));
+        let picked = picker::dial(ui, &mut c, Rect::new(inner.x, inner.y + 4.0, inner.w, inner.h - 4.0), Some(tr("All day")));
         let time = match picked {
             picker::Picked::None => {
                 s.clock = Some(c);
@@ -493,11 +492,11 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     }
 
     // Header: what's being dated, and Done.
-    let done_w = ui.measure("Done", 11.0, SEMIBOLD) + 24.0;
+    let done_w = ui.measure(tr("Done"), 11.0, SEMIBOLD) + 24.0;
     let done_r = Rect::new(inner.right() - done_w, inner.y, done_w, 26.0);
     let hov = ui.hovered(done_r);
     ui.fill(done_r, 8.0, with_alpha(t.accent, if hov { 0.85 } else { 1.0 }));
-    ui.text("Done", done_r, 11.0, SEMIBOLD, t.on_accent, Align::Center);
+    ui.text(tr("Done"), done_r, 11.0, SEMIBOLD, t.on_accent, Align::Center);
     if ui.clicked(done_r) {
         s.panel = None;
         s.clock = None;
@@ -512,7 +511,7 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     let next_week = today + if to_monday == 0 { 7 } else { to_monday };
     let time = due.and_then(|d| d.3);
     let mut x = inner.x;
-    for (label, day) in [("Today", Some(today)), ("Tomorrow", Some(today + 1)), ("Next week", Some(next_week)), ("No date", None)] {
+    for (label, day) in [(tr("Today"), Some(today)), (tr("Tomorrow"), Some(today + 1)), (tr("Next week"), Some(next_week)), (tr("No date"), None)] {
         let selected = match day {
             None => due.is_none(),
             Some(d) => due.is_some_and(|x| days_of(&x) == d),
@@ -537,7 +536,7 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
             ui.fill(cell, 8.0, t.surface2);
         }
         let (_, _, dnum) = civil_from_days(day);
-        let name = &DAYS[dow(day)][..2];
+        let name = crate::i18n::day2(dow(day));
         ui.text(name, Rect::new(cell.x, cell.y + 3.0, cell.w, 13.0), 10.0, REGULAR, if selected { t.on_accent } else { t.subtext }, Align::Center);
         ui.text(
             &dnum.to_string(),
@@ -556,13 +555,13 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     // Time: "Pick a time" (or the time) and All day.
     ui.icon("Clock", inner.x + 2.0 + 6.5, y + 11.5, 13.0, t.subtext);
     let tx = inner.x + 23.0;
-    let label = time.map_or("Pick a time".to_string(), |(h, m)| format!("{h:02}:{m:02}"));
+    let label = time.map_or(tr("Pick a time").to_string(), |(h, m)| format!("{h:02}:{m:02}"));
     let (pr, clicked) = pill(ui, tx, y, &label, time.is_some(), None);
     if clicked {
         s.clock = Some(new_clock(time));
     }
     if time.is_some() {
-        let (_, clicked) = pill(ui, pr.right() + 4.0, y, "All day", false, None);
+        let (_, clicked) = pill(ui, pr.right() + 4.0, y, tr("All day"), false, None);
         if clicked {
             let day = due.map_or(today, |d| days_of(&d));
             apply(s, Some(input_for_days(day, None)), None);
@@ -573,7 +572,7 @@ fn due_panel(ui: &mut Ui, s: &mut State, r: Rect, items: &[Todo]) {
     // Priority, as in TickTick.
     ui.icon("Flag", inner.x + 2.0 + 6.5, y + 11.5, 13.0, t.subtext);
     let mut x = tx;
-    for (label, value, dot) in [("None", 0, None), ("Low", 1, Some(BLUE)), ("Medium", 3, Some(AMBER)), ("High", 5, Some(RED))] {
+    for (label, value, dot) in [(tr("None"), 0, None), (tr("Low"), 1, Some(BLUE)), (tr("Medium"), 3, Some(AMBER)), (tr("High"), 5, Some(RED))] {
         let (pr, clicked) = pill(ui, x, y, label, priority == value, dot);
         if clicked {
             apply(s, due, Some(value));

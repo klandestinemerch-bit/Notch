@@ -569,7 +569,7 @@ fn failed(gen: u64) {
         }
         s.failures += 1;
         let name = s.queue.get(s.index).map(|t| t.title.clone()).unwrap_or_default();
-        s.error = Some(format!("Couldn't play “{name}”"));
+        s.error = Some(crate::i18n::tf!("Couldn't play “{name}”", "Gagal memutar “{name}”"));
         if s.failures >= s.queue.len() {
             s.now = None;
             s.failures = 0;
@@ -631,7 +631,7 @@ pub fn add(paths: Vec<String>, play: bool) {
 
 /// The Open dialog for songs (several at once), then `add`.
 pub fn pick_files(play: bool) {
-    let files = dialog(false);
+    let files = dialog(false, true, crate::i18n::tr("Add music"));
     if !files.is_empty() {
         add(files, play);
     }
@@ -639,9 +639,22 @@ pub fn pick_files(play: bool) {
 
 /// The folder dialog, then `add` with every song in it.
 pub fn pick_folder(play: bool) {
-    let folder = dialog(true);
+    let folder = dialog(true, false, crate::i18n::tr("Add a music folder"));
     if !folder.is_empty() {
         add(folder, play);
+    }
+}
+
+/// The Open dialog for one audio file (the adzan), titled `title`.
+pub fn pick_file(title: &str) -> Option<String> {
+    dialog(false, false, title).into_iter().next()
+}
+
+/// Pauses the song playing here, if one is (the adzan is starting).
+pub fn pause_if_playing() {
+    let playing = lock().now.as_ref().is_some_and(|n| n.playing);
+    if playing {
+        play_pause();
     }
 }
 
@@ -819,10 +832,11 @@ pub fn cycle_repeat() {
 
 // ---------------------------------------------------------------------- dialogs
 
-/// The Open dialog for audio files (several), or the folder picker. Runs on its own STA thread, owned by
-/// the notch so it shows above it. Blocking: call from a background thread.
-fn dialog(folder: bool) -> Vec<String> {
+/// The Open dialog for audio files (several with `multi`), or the folder picker. Runs on its own STA
+/// thread, owned by the notch so it shows above it. Blocking: call from a background thread.
+fn dialog(folder: bool, multi: bool, title: &str) -> Vec<String> {
     let owner = crate::bg::window().map(|h| h.0 as isize).unwrap_or(0);
+    let title = title.to_string();
     std::thread::spawn(move || unsafe {
         use windows::core::PCWSTR;
         use windows::Win32::Foundation::HWND;
@@ -832,15 +846,21 @@ fn dialog(folder: bool) -> Vec<String> {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
         let mut out = Vec::new();
         if let Ok(dlg) = CoCreateInstance::<_, IFileOpenDialog>(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) {
-            let _ = dlg.SetTitle(&HSTRING::from(if folder { "Add a music folder" } else { "Add music" }));
+            let _ = dlg.SetTitle(&HSTRING::from(title));
             if let Ok(opts) = dlg.GetOptions() {
-                let kind = if folder { FOS_PICKFOLDERS } else { FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST };
+                let kind = if folder {
+                    FOS_PICKFOLDERS
+                } else if multi {
+                    FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST
+                } else {
+                    FOS_FILEMUSTEXIST
+                };
                 let _ = dlg.SetOptions(opts | kind | FOS_FORCEFILESYSTEM);
             }
             // The filter strings must outlive Show.
-            let audio_name = HSTRING::from("Audio files");
+            let audio_name = HSTRING::from(crate::i18n::tr("Audio files"));
             let audio_spec = HSTRING::from(EXTENSIONS.iter().map(|e| format!("*.{e}")).collect::<Vec<_>>().join(";"));
-            let all_name = HSTRING::from("All files");
+            let all_name = HSTRING::from(crate::i18n::tr("All files"));
             let all_spec = HSTRING::from("*.*");
             if !folder {
                 let filters = [

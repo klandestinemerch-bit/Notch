@@ -10,6 +10,7 @@ mod clipboard;
 mod dragdrop;
 mod gfx;
 mod http;
+mod i18n;
 mod model;
 mod notch;
 mod services;
@@ -495,6 +496,7 @@ fn caps_alert(on: bool) {
         return;
     }
     let (title, sub) = if on { ("Caps Lock on", "TYPING IN CAPITALS") } else { ("Caps Lock off", "typing in lowercase") };
+    let (title, sub) = (crate::i18n::tr(title), crate::i18n::tr(sub));
     model::push_alert(Alert {
         key: "lock".into(),
         kind: AlertKind::Compact { icon: "ArrowUp", title: title.into(), sub: sub.into() },
@@ -544,10 +546,15 @@ fn tray_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
         let capsule = settings::get().notch_style == "Capsule";
-        let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, w!("Settings"));
-        let _ = AppendMenuW(menu, MF_STRING | if capsule { MF_CHECKED } else { MF_UNCHECKED }, MENU_STYLE, w!("Capsule style"));
+        let (settings_l, style_l, quit_l) = (
+            windows::core::HSTRING::from(crate::i18n::tr("Settings")),
+            windows::core::HSTRING::from(crate::i18n::tr("Capsule style")),
+            windows::core::HSTRING::from(crate::i18n::tr("Quit FathNotch")),
+        );
+        let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, &settings_l);
+        let _ = AppendMenuW(menu, MF_STRING | if capsule { MF_CHECKED } else { MF_UNCHECKED }, MENU_STYLE, &style_l);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, w!("Quit FathNotch"));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, &quit_l);
         let mut p = POINT::default();
         let _ = GetCursorPos(&mut p);
         let _ = SetForegroundWindow(hwnd);

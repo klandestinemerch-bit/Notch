@@ -8,6 +8,7 @@ use crate::gfx::{color, mix, with_alpha, Align, Color, BOLD, MEDIUM, REGULAR, SE
 use crate::services::phone::{self, OutKind, Snapshot};
 use crate::services::{qr, settings, shortcuts};
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 pub struct State {
     qr_for: Option<String>,
@@ -104,7 +105,7 @@ fn off_state(ui: &mut Ui, snap: &Snapshot, r: Rect) {
     let w = 460.0f32.min(r.w);
     let x = r.cx() - w / 2.0;
     let waiting = snap.outbox.len();
-    let body = "Send files and text both ways between your phone and this PC. Scan a QR code, no app needed.";
+    let body = tr("Send files and text both ways between your phone and this PC. Scan a QR code, no app needed.");
     let lines = wrap(ui, body, 12.0, REGULAR, w - 40.0);
     let status_lines = if snap.status.is_empty() { vec![] } else { wrap(ui, &snap.status, 11.0, REGULAR, w) };
     let h = 72.0 + 14.0 + lh(17.0) + 4.0 + lines.len() as f32 * lh(12.0) + 14.0 + 26.0 + 16.0 + 34.0
@@ -122,7 +123,7 @@ fn off_state(ui: &mut Ui, snap: &Snapshot, r: Rect) {
     ui.animate = true;
     y += 72.0 + 14.0;
 
-    ui.text("Connect your phone", Rect::new(x, y, w, lh(17.0)), 17.0, SEMIBOLD, t.text, Align::Center);
+    ui.text(tr("Connect your phone"), Rect::new(x, y, w, lh(17.0)), 17.0, SEMIBOLD, t.text, Align::Center);
     y += lh(17.0) + 4.0;
     for l in &lines {
         ui.text(l, Rect::new(x, y, w, lh(12.0)), 12.0, REGULAR, t.subtext, Align::Center);
@@ -131,7 +132,7 @@ fn off_state(ui: &mut Ui, snap: &Snapshot, r: Rect) {
     y += 14.0;
 
     // Three chips: what it is.
-    let chips: [(&'static str, &str); 3] = [("Wifi", "Same Wi-Fi"), ("ArrowsUpDown", "Both ways"), ("Lock", "Stays on your network")];
+    let chips: [(&'static str, &str); 3] = [("Wifi", tr("Same Wi-Fi")), ("ArrowsUpDown", tr("Both ways")), ("Lock", tr("Stays on your network"))];
     let widths: Vec<f32> = chips.iter().map(|(_, l)| ui.measure(l, 11.0, MEDIUM).ceil() + 28.0 + 10.0).collect();
     let total = widths.iter().sum::<f32>() + 8.0 * (chips.len() - 1) as f32;
     let mut cx0 = r.cx() - total / 2.0;
@@ -144,7 +145,7 @@ fn off_state(ui: &mut Ui, snap: &Snapshot, r: Rect) {
     }
     y += 26.0 + 16.0;
 
-    let label = if snap.starting { "Starting…" } else { "Turn on" };
+    let label = if snap.starting { tr("Starting…") } else { tr("Turn on") };
     let bw = button_w(ui, label, true, 13.0, SEMIBOLD).max(140.0);
     if button(ui, Rect::new(r.cx() - bw / 2.0, y, bw, 34.0), label, Some("Bolt"), 13.0, true, !snap.starting) {
         bg::spawn(phone::turn_on);
@@ -153,9 +154,9 @@ fn off_state(ui: &mut Ui, snap: &Snapshot, r: Rect) {
     if waiting > 0 {
         y += 10.0;
         let msg = if waiting == 1 {
-            "1 item waiting · turn on to send it".to_string()
+            tr("1 item waiting · turn on to send it").to_string()
         } else {
-            format!("{waiting} items waiting · turn on to send them")
+            crate::i18n::tf!("{waiting} items waiting · turn on to send them", "{waiting} item menunggu · nyalakan untuk mengirimnya")
         };
         ui.text(&msg, Rect::new(x, y, w, lh(11.0)), 11.0, MEDIUM, t.accent, Align::Center);
         y += lh(11.0);
@@ -174,7 +175,7 @@ fn on_state(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     let (head, body) = r.take_top(26.0, 10.0);
 
     // Header left: the link chip (accent with a pulse while the phone page is open).
-    let link = if snap.connected { "Phone connected" } else { "Waiting for phone" };
+    let link = if snap.connected { tr("Phone connected") } else { tr("Waiting for phone") };
     let lw = ui.measure(link, 11.0, SEMIBOLD).ceil() + 40.0;
     let chip = Rect::new(head.x, head.y, lw, head.h);
     let (dot_x, dot_y) = (chip.x + 16.0, chip.cy());
@@ -192,14 +193,14 @@ fn on_state(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     }
 
     // Header right: Received, Turn off; a status or note to their left.
-    let off_w = button_w(ui, "Turn off", false, 11.0, MEDIUM);
+    let off_w = button_w(ui, tr("Turn off"), false, 11.0, MEDIUM);
     let off_r = Rect::new(head.right() - off_w, head.y, off_w, head.h);
-    if button(ui, off_r, "Turn off", None, 11.5, false, true) {
+    if button(ui, off_r, tr("Turn off"), None, 11.5, false, true) {
         bg::spawn(phone::turn_off);
     }
-    let rec_w = button_w(ui, "Received", true, 11.0, MEDIUM);
+    let rec_w = button_w(ui, tr("Received"), true, 11.0, MEDIUM);
     let rec_r = Rect::new(off_r.x - 6.0 - rec_w, head.y, rec_w, head.h);
-    if button(ui, rec_r, "Received", Some("Folder"), 11.5, false, true) {
+    if button(ui, rec_r, tr("Received"), Some("Folder"), 11.5, false, true) {
         let dir = phone::receive_folder();
         bg::spawn(move || {
             let _ = std::fs::create_dir_all(&dir);
@@ -207,13 +208,13 @@ fn on_state(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
         });
     }
     let note = s.note.as_ref().filter(|(_, at)| at.elapsed().as_secs() < 3).map(|(n, _)| n.clone());
-    let status = note.unwrap_or_else(|| snap.status.clone());
+    let status = note.unwrap_or_else(|| tr(&snap.status).to_string());
     let free = rec_r.x - 10.0 - chip.right() - 10.0;
     if !status.is_empty() {
         let w = (ui.measure(&status, 11.0, REGULAR).ceil() + 2.0).min(free.max(0.0));
         ui.text(&status, Rect::new(rec_r.x - 10.0 - w, head.y, w, head.h), 11.0, REGULAR, t.danger, Align::Right);
     } else if !snap.connected && free > 240.0 {
-        ui.text("Scan the code with your phone's camera", Rect::new(chip.right() + 10.0, head.y, free, head.h), 11.0, REGULAR, t.subtext, Align::Left);
+        ui.text(tr("Scan the code with your phone's camera"), Rect::new(chip.right() + 10.0, head.y, free, head.h), 11.0, REGULAR, t.subtext, Align::Left);
     }
 
     // Columns: QR card (150) | 12 | To phone card | 12 | Activity card.
@@ -235,7 +236,7 @@ fn qr_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     let inner = r.inset(10.0, 10.0);
     let Some(url) = snap.web_url.clone() else {
         ui.icon("Wifi", inner.cx(), inner.cy() - 22.0, 22.0, t.accent);
-        let lines = wrap(ui, "Join the same Wi-Fi as your phone", 11.0, REGULAR, inner.w);
+        let lines = wrap(ui, tr("Join the same Wi-Fi as your phone"), 11.0, REGULAR, inner.w);
         let mut y = inner.cy();
         for l in &lines {
             ui.text(l, Rect::new(inner.x, y, inner.w, lh(11.0)), 11.0, REGULAR, t.subtext, Align::Center);
@@ -288,7 +289,7 @@ fn qr_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
         }
     }
     y += ring_side + 10.0;
-    ui.text("Scan with your phone", Rect::new(inner.x, y, inner.w, lh(11.0)), 11.0, SEMIBOLD, t.text, Align::Center);
+    ui.text(tr("Scan with your phone"), Rect::new(inner.x, y, inner.w, lh(11.0)), 11.0, SEMIBOLD, t.text, Align::Center);
     y += lh(11.0);
     if addr {
         y += 6.0;
@@ -305,9 +306,9 @@ fn qr_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
         y += 16.0;
         ui.fill(Rect::new(x0, y, w, 1.0), 0.0, with_alpha(t.accent, 0.18));
         y += 12.0;
-        ui.text("HOW IT WORKS", Rect::new(x0, y, w, lh(10.0)), 10.0, BOLD, t.accent, Align::Left);
+        ui.text(tr("HOW IT WORKS"), Rect::new(x0, y, w, lh(10.0)), 10.0, BOLD, t.accent, Align::Left);
         y += lh(10.0) + 8.0;
-        for (i, step) in ["Phone on the same Wi-Fi as this PC", "Scan the code with its camera", "Drop files here, or send from the page"].iter().enumerate() {
+        for (i, step) in [tr("Phone on the same Wi-Fi as this PC"), tr("Scan the code with its camera"), tr("Drop files here, or send from the page")].iter().enumerate() {
             let c = Rect::new(x0, y, 18.0, 18.0);
             ui.fill(c, 9.0, t.accent);
             ui.text(&(i + 1).to_string(), c, 10.0, BOLD, t.on_accent, Align::Center);
@@ -370,7 +371,7 @@ fn icon_tile(ui: &mut Ui, cx: f32, cy: f32, icon: &'static str, on: bool, c: Opt
 fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     let t = ui.t;
     let (head, body) = r.take_top(22.0, 8.0);
-    caps(ui, "TO PHONE", snap.outbox.len(), head);
+    caps(ui, tr("TO PHONE"), snap.outbox.len(), head);
     // Right to left: Trash (only with items), Clipboard, Plus (accent) — so they read Plus, Clipboard, Trash.
     let mut bx = head.right() - 22.0;
     if !snap.outbox.is_empty() {
@@ -380,7 +381,7 @@ fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
         bx -= 24.0;
     }
     if ui.icon_button(Rect::new(bx, head.y, 22.0, 22.0), "ClipboardList", 12.0, t.subtext) && !phone::send_clipboard() {
-        s.note = Some(("Nothing on the clipboard to send.".into(), std::time::Instant::now()));
+        s.note = Some((tr("Nothing on the clipboard to send.").into(), std::time::Instant::now()));
     }
     bx -= 24.0;
     let plus = Rect::new(bx, head.y, 22.0, 22.0);
@@ -389,7 +390,7 @@ fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     ui.icon("Plus", plus.cx(), plus.cy(), 12.0, t.on_accent);
     if ui.clicked(plus) {
         bg::spawn(|| {
-            let files = shortcuts::pick_files("Send to phone", true);
+            let files = shortcuts::pick_files(tr("Send to phone"), true);
             if !files.is_empty() {
                 phone::send(&files);
             }
@@ -399,7 +400,7 @@ fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
     if snap.outbox.is_empty() {
         ui.fill(body, 12.0, with_alpha(t.accent, 0.05));
         dashed_round(ui, body.inset(0.75, 0.75), 12.0, with_alpha(t.accent, 0.5), 1.5, 6.0, 4.5);
-        empty(ui, body, "ArrowUp", "Drop files or folders here", "They show up on the phone page right away.");
+        empty(ui, body, "ArrowUp", tr("Drop files or folders here"), tr("They show up on the phone page right away."));
         return;
     }
     let row_h = 8.0 + lh(11.0) + lh(11.0) + 8.0;
@@ -423,12 +424,12 @@ fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
             let tx = Rect::new(row.x + 42.0, row.y + 8.0, row.w - 42.0 - 8.0 - 24.0, lh(11.0));
             ui.text(&o.name, tx, 11.0, SEMIBOLD, t.text, Align::Left);
             let sub = Rect::new(tx.x, tx.bottom(), tx.w, lh(11.0));
-            let detail = format!("{} · ", o.detail());
+            let detail = format!("{} · ", tr(&o.detail()));
             let dw = ui.measure(&detail, 11.0, REGULAR).ceil();
             ui.text(&detail, sub, 11.0, REGULAR, t.subtext, Align::Left);
             if dw < sub.w {
                 let (sc, sw) = if done { (t.accent, MEDIUM) } else { (t.subtext, REGULAR) };
-                ui.text(&o.state, Rect::new(sub.x + dw, sub.y, sub.w - dw, sub.h), 10.5, sw, sc, Align::Left);
+                ui.text(tr(&o.state), Rect::new(sub.x + dw, sub.y, sub.w - dw, sub.h), 10.5, sw, sc, Align::Left);
             }
             if ui.icon_button(Rect::new(row.right() - 8.0 - 20.0, row.cy() - 10.0, 20.0, 20.0), "XMark", 10.0, t.subtext) {
                 remove = Some(o.id.clone());
@@ -443,14 +444,14 @@ fn outbox_panel(ui: &mut Ui, s: &mut State, snap: &Snapshot, r: Rect) {
 fn activity_panel(ui: &mut Ui, s: &State, snap: &Snapshot, r: Rect) {
     let t = ui.t;
     let (head, body) = r.take_top(22.0, 8.0);
-    caps(ui, "ACTIVITY", snap.transfers.len(), head);
+    caps(ui, tr("ACTIVITY"), snap.transfers.len(), head);
     if snap.transfers.iter().any(|t| !t.active)
         && ui.icon_button(Rect::new(head.right() - 22.0, head.y, 22.0, 22.0), "Trash", 12.0, t.subtext)
     {
         phone::clear_transfers();
     }
     if snap.transfers.is_empty() {
-        empty(ui, body, "ArrowsUpDown", "Nothing yet", &format!("Files from the phone land on the Shelf and in {}.", s.folder_short));
+        empty(ui, body, "ArrowsUpDown", tr("Nothing yet"), &crate::i18n::tf!("Files from the phone land on the Shelf and in {}.", "File dari ponsel masuk ke Rak dan ke {}.", s.folder_short));
         return;
     }
     let base_h = 8.0 + lh(11.0) + lh(11.0) + 8.0;
@@ -474,7 +475,8 @@ fn activity_panel(ui: &mut Ui, s: &State, snap: &Snapshot, r: Rect) {
             let right_pad = 8.0 + 24.0;
             let tx = Rect::new(row.x + 42.0, row.y + 8.0, row.w - 42.0 - right_pad, lh(11.0));
             ui.text(&tr.title, tx, 11.0, SEMIBOLD, t.text, Align::Left);
-            let sub = if tr.state.is_empty() { tr.direction() } else { format!("{} · {}", tr.direction(), tr.state) };
+            let dir = if tr.incoming { crate::i18n::tf!("From {}", "Dari {}", tr.peer) } else { crate::i18n::tf!("To {}", "Ke {}", tr.peer) };
+            let sub = if tr.state.is_empty() { dir } else { format!("{dir} · {}", crate::i18n::tr(&tr.state)) };
             ui.text(&sub, Rect::new(tx.x, tx.bottom(), tx.w, lh(11.0)), 11.0, REGULAR, if tr.failed { t.danger } else { t.subtext }, Align::Left);
             if tr.active {
                 let track = Rect::new(tx.x, tx.bottom() + lh(11.0) + 4.0, tx.w, 4.0);

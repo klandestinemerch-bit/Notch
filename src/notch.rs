@@ -16,6 +16,7 @@ use crate::spring::Spring;
 use crate::tools::{self, CONTENT_W};
 use crate::ui::{Input, Rect, Theme, Ui, UiState};
 use crate::views;
+use crate::i18n::tr;
 
 const EAR_CLOSED: f32 = 8.0;
 const EAR_OPEN: f32 = 11.0;
@@ -569,8 +570,8 @@ impl Notch {
                             let template = match i.id {
                                 "clock" => "00:00",
                                 "weather" => "-00°",
-                                "prayer" => "Maghrib 00:00",
-                                "todos" => "00 open",
+                                "prayer" => tr("Maghrib 00:00"),
+                                "todos" => tr("00 open"),
                                 "battery" => "100%",
                                 _ => "",
                             };
@@ -1173,13 +1174,13 @@ impl Notch {
         if self.tool == "settings" {
             let back = Rect::new(head.x - 6.0, head.cy() - 15.0, 30.0, 30.0);
             back_clicked = ui.icon_button(back, "ChevronLeft", 14.0, t.text);
-            ui.text(tool.title, Rect::new(head.x + 28.0, head.y, 260.0, head.h), 17.0, SEMIBOLD, t.text, Align::Left);
+            ui.text(tr(tool.title), Rect::new(head.x + 28.0, head.y, 260.0, head.h), 17.0, SEMIBOLD, t.text, Align::Left);
         } else {
-            ui.text(tool.title, Rect::new(head.x, head.y, 260.0, head.h), 17.0, SEMIBOLD, t.text, Align::Left);
+            ui.text(tr(tool.title), Rect::new(head.x, head.y, 260.0, head.h), 17.0, SEMIBOLD, t.text, Align::Left);
         }
         // Home shows its own date and clock, so the header one stays off there.
         if s_.header_clock && self.tool != "home" {
-            let date = format!("{} {} {} {}", &DAYS[now.dow][..3], now.day, &MONTHS[now.month - 1][..3], now.year);
+            let date = format!("{} {} {} {}", crate::i18n::day3(now.dow), now.day, crate::i18n::month3(now.month), now.year);
             let time = format!("{:02}:{:02}", now.hour, now.minute);
             let dw = ui.measure(&date, 14.0, REGULAR);
             let tw = ui.measure(&time, 14.0, BOLD);

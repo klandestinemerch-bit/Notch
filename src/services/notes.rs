@@ -33,14 +33,14 @@ pub struct Note {
 impl Note {
     /// First non-blank line, or "New note".
     pub fn title(&self) -> &str {
-        self.text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("New note")
+        self.text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or(crate::i18n::tr("New note"))
     }
 
     /// The next non-blank line (up to 80 characters), or "No additional text".
     pub fn preview(&self) -> String {
         match self.text.lines().map(str::trim).filter(|l| !l.is_empty()).nth(1) {
             Some(l) => l.chars().take(80).collect(),
-            None => "No additional text".into(),
+            None => crate::i18n::tr("No additional text").into(),
         }
     }
 

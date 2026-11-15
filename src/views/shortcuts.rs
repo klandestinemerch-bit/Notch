@@ -9,6 +9,7 @@ use crate::bg;
 use crate::gfx::{color, with_alpha, Align, MEDIUM, REGULAR, SEMIBOLD};
 use crate::services::shortcuts::{self, Shortcut};
 use crate::ui::{id, Key, Rect, Ui};
+use crate::i18n::tr;
 
 const SEARCH: &str = "shortcuts.search";
 const NAME: &str = "shortcuts.name";
@@ -101,7 +102,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     field_chrome(ui, field, ui.st.focus == sid, false);
     ui.icon("Magnifier", field.x + 18.5, field.cy(), 15.0, t.subtext);
     let has_text = !ui.field_text(sid).is_empty();
-    let _ = ui.text_field(sid, field.pad(36.0, 0.0, if has_text { 30.0 } else { 10.0 }, 0.0), "Search shortcuts…", 13.0);
+    let _ = ui.text_field(sid, field.pad(36.0, 0.0, if has_text { 30.0 } else { 10.0 }, 0.0), tr("Search shortcuts…"), 13.0);
     let query = ui.field_text(sid).trim().to_lowercase();
     if has_text && ui.icon_button(Rect::new(field.right() - 28.0, field.cy() - 11.0, 22.0, 22.0), "XMark", 12.0, t.subtext) {
         ui.set_field_text(sid, "");
@@ -159,8 +160,8 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
         if let Some(i) = run {
             let item = s.items[i].clone();
             match shortcuts::run(&item) {
-                Ok(()) => flash(s, format!("Ran {}", item.name), false),
-                Err(e) => flash(s, e, true),
+                Ok(()) => flash(s, crate::i18n::tf!("Ran {}", "Membuka {}", tr(&item.name)), false),
+                Err(e) => flash(s, tr(&e).to_string(), true),
             }
         }
     }
@@ -187,8 +188,8 @@ fn editor(ui: &mut Ui, s: &mut State, r: Rect) {
     let inner = r.inset(8.0, 8.0);
     let (name_r, rest) = inner.take_left(120.0, 6.0);
     let (close_r, rest) = rest.take_right(26.0, 2.0);
-    let (save_r, rest) = rest.take_right(button_w(ui, "Save", true), 6.0);
-    let (browse_r, target_r) = rest.take_right(button_w(ui, "Browse", false), 6.0);
+    let (save_r, rest) = rest.take_right(button_w(ui, tr("Save"), true), 6.0);
+    let (browse_r, target_r) = rest.take_right(button_w(ui, tr("Browse"), false), 6.0);
 
     // A file chosen with Browse arrives from the dialog thread.
     if let Some(p) = s.picked.lock().unwrap().take() {
@@ -200,7 +201,7 @@ fn editor(ui: &mut Ui, s: &mut State, r: Rect) {
     }
 
     let mut submit = false;
-    for (fid, fr, ph, key) in [(id(NAME), name_r, "Name", "name"), (id(TARGET), target_r, "App, file, folder, URL or ms-settings:…", "target")] {
+    for (fid, fr, ph, key) in [(id(NAME), name_r, tr("Name"), "name"), (id(TARGET), target_r, tr("App, file, folder, URL or ms-settings:…"), "target")] {
         let bad = s.invalid == Some(key);
         field_chrome(ui, fr, ui.st.focus == fid, bad);
         // Enter saves instead of clearing the field (the kit's field clears on Enter).
@@ -219,15 +220,15 @@ fn editor(ui: &mut Ui, s: &mut State, r: Rect) {
         ui.st.focus = id(NAME);
         ui.wants_keyboard = true;
     }
-    if button(ui, browse_r, "Browse", false) {
+    if button(ui, browse_r, tr("Browse"), false) {
         let slot = s.picked.clone();
         bg::spawn(move || {
-            if let Some(p) = shortcuts::pick_files("Choose an app or file", false).into_iter().next() {
+            if let Some(p) = shortcuts::pick_files(tr("Choose an app or file"), false).into_iter().next() {
                 *slot.lock().unwrap() = Some(p);
             }
         });
     }
-    if button(ui, save_r, "Save", true) {
+    if button(ui, save_r, tr("Save"), true) {
         submit = true;
     }
     if ui.icon_button(Rect::new(close_r.x, close_r.cy() - 13.0, 26.0, 26.0), "XMark", 13.0, t.subtext) {

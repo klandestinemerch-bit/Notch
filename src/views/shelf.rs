@@ -13,6 +13,7 @@ use crate::bg;
 use crate::gfx::{with_alpha, Align, REGULAR};
 use crate::services::{cliphistory, phone, shelf};
 use crate::ui::{id, Key, Rect, Ui};
+use crate::i18n::tr;
 
 const TILE_W: f32 = 74.0;
 const TILE_H: f32 = 82.0;
@@ -102,16 +103,16 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'static str>) 
     if !items.is_empty() {
         let n = items.len();
         let label = if s.selected.is_empty() {
-            format!("{n} item{}", if n == 1 { "" } else { "s" })
+            crate::i18n::tf!("{n} item{}", "{n} item{}", if n == 1 || crate::i18n::is_id() { "" } else { "s" })
         } else {
-            format!("{} of {n} selected", s.selected.len())
+            crate::i18n::tf!("{} of {n} selected", "{} dari {n} dipilih", s.selected.len())
         };
         ui.text(&label, top_r, 12.5, crate::gfx::SEMIBOLD, t.subtext, Align::Left);
     }
-    let clear_w = ui.measure("Clear", 13.0, crate::gfx::MEDIUM).ceil() + 28.0;
+    let clear_w = ui.measure(tr("Clear"), 13.0, crate::gfx::MEDIUM).ceil() + 28.0;
     let (clear_r, hint_r) = top_r.take_right(clear_w, 10.0);
-    ui.text("Drag out · double-click to open", hint_r, 12.5, crate::gfx::SEMIBOLD, t.subtext, Align::Right);
-    if button(ui, clear_r, "Clear") && !menu_hit {
+    ui.text(tr("Drag out · double-click to open"), hint_r, 12.5, crate::gfx::SEMIBOLD, t.subtext, Align::Right);
+    if button(ui, clear_r, tr("Clear")) && !menu_hit {
         shelf::clear();
         s.selected.clear();
     }
@@ -121,7 +122,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, go: &mut Option<&'static str>) 
         dashed_round(ui, body.inset(0.6, 0.6), 12.0, t.track, 1.2, 6.0, 4.8);
         let cy = body.cy() - (26.0 + 8.0 + 17.0) / 2.0;
         ui.icon("ArchiveBox", body.cx(), cy + 13.0, 26.0, t.subtext);
-        ui.text("Drop files or text onto the notch", Rect::new(body.x, cy + 34.0, body.w, 17.0), 12.5, crate::gfx::SEMIBOLD, t.subtext, Align::Center);
+        ui.text(tr("Drop files or text onto the notch"), Rect::new(body.x, cy + 34.0, body.w, 17.0), 12.5, crate::gfx::SEMIBOLD, t.subtext, Align::Center);
         draw_menu(ui, s, r);
         return;
     }
@@ -612,6 +613,7 @@ fn draw_menu(ui: &mut Ui, s: &State, r: Rect) {
         if row.contains(ui.mouse()) {
             ui.fill(row, 5.0, t.hover);
         }
+        let label = tr(label);
         let text = if n > 1 && k != 1 { format!("{label} ({n})") } else { label.to_string() };
         ui.text(&text, row.pad(10.0, 0.0, 6.0, 0.0), 13.0, REGULAR, t.text, Align::Left);
     }

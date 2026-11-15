@@ -10,6 +10,7 @@ use crate::gfx::{color, mix, with_alpha, Align, Color, BOLD, MEDIUM, REGULAR, SE
 use crate::model;
 use crate::services::{appicons, audio, brightness, radios};
 use crate::ui::{id, idx, Rect, Ui};
+use crate::i18n::tr;
 
 /// C# "BadBrush" (mute on).
 const BAD: u32 = 0xFF453A;
@@ -202,17 +203,17 @@ fn draw_tiles(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
         let e = 1.0 - (1.0 - k).powi(3);
         cols.push((Rect::new(r.x + i as f32 * w, r.y + 8.0 * (1.0 - e), w - 6.0, r.h), e));
     }
-    let turning = |b: Option<bool>| b.map(|on| if on { "Turning on…" } else { "Turning off…" });
+    let turning = |b: Option<bool>| b.map(|on| if on { tr("Turning on…") } else { tr("Turning off…") });
 
     ui.alpha = base * cols[0].1;
     let wifi_on = d.wifi == Some(true);
     let wifi_status = turning(d.busy[0]).map(str::to_string).unwrap_or_else(|| match d.wifi {
-        None if d.loaded => "Not available".into(),
+        None if d.loaded => tr("Not available").into(),
         None => "…".into(),
-        Some(false) => "Off".into(),
-        Some(true) => d.wifi_name.clone().unwrap_or_else(|| "Not connected".into()),
+        Some(false) => tr("Off").into(),
+        Some(true) => d.wifi_name.clone().unwrap_or_else(|| tr("Not connected").into()),
     });
-    let (tog, open) = tile(ui, cols[0].0, "Wifi", "Wi-Fi", &wifi_status, wifi_on, d.wifi.is_some() || !d.loaded);
+    let (tog, open) = tile(ui, cols[0].0, "Wifi", tr("Wi-Fi"), &wifi_status, wifi_on, d.wifi.is_some() || !d.loaded);
     if tog {
         switch_radio(s, 0, !wifi_on);
     }
@@ -223,10 +224,10 @@ fn draw_tiles(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     ui.alpha = base * cols[1].1;
     let bt_on = d.bt == Some(true);
     let bt_status = turning(d.busy[1]).unwrap_or(match d.bt {
-        None if d.loaded => "Not available",
+        None if d.loaded => tr("Not available"),
         None => "…",
-        Some(true) => "On",
-        Some(false) => "Off",
+        Some(true) => tr("On"),
+        Some(false) => tr("Off"),
     });
     let (tog, open) = tile(ui, cols[1].0, "Bluetooth", "Bluetooth", bt_status, bt_on, d.bt.is_some() || !d.loaded);
     if tog {
@@ -239,12 +240,12 @@ fn draw_tiles(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     ui.alpha = base * cols[2].1;
     let hs_on = d.hotspot == Some(true);
     let hs_status = turning(d.busy[2]).unwrap_or(match d.hotspot {
-        None if d.loaded => "Not available",
+        None if d.loaded => tr("Not available"),
         None => "…",
-        Some(true) => "On",
-        Some(false) => "Off",
+        Some(true) => tr("On"),
+        Some(false) => tr("Off"),
     });
-    let (tog, open) = tile(ui, cols[2].0, "Signal", "Hotspot", hs_status, hs_on, d.hotspot.is_some() || !d.loaded);
+    let (tog, open) = tile(ui, cols[2].0, "Signal", tr("Hotspot"), hs_status, hs_on, d.hotspot.is_some() || !d.loaded);
     if tog {
         switch_radio(s, 2, !hs_on);
     }
@@ -257,8 +258,8 @@ fn draw_tiles(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
         ui,
         cols[3].0,
         if d.silent { "SpeakerMuted" } else { "Bell" },
-        "Silent",
-        if d.silent { "No pop-ups" } else { "Off" },
+        tr("Silent"),
+        if d.silent { tr("No pop-ups") } else { tr("Off") },
         d.silent,
         true,
     );
@@ -276,7 +277,7 @@ fn draw_tiles(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     // Keep awake: the PC and screen don't sleep while it's on (runs on this, the window thread).
     ui.alpha = base * cols[4].1;
     let awake = crate::services::awake::on();
-    let (tog, open) = tile(ui, cols[4].0, "Coffee", "Awake", if awake { "On" } else { "Off" }, awake, true);
+    let (tog, open) = tile(ui, cols[4].0, "Coffee", tr("Awake"), if awake { tr("On") } else { tr("Off") }, awake, true);
     if tog || open {
         crate::services::awake::set(!awake);
     }
@@ -447,13 +448,13 @@ fn brightness_card(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     ui.card(r, 16.0);
     let inner = r.pad(14.0, 10.0, 14.0, 8.0);
     ui.icon("Sun", inner.x + 6.5, inner.y + 7.0, 13.0, t.subtext);
-    ui.text("BRIGHTNESS", Rect::new(inner.x + 19.0, inner.y, 200.0, 14.0), 11.0, BOLD, t.subtext, Align::Left);
+    ui.text(tr("BRIGHTNESS"), Rect::new(inner.x + 19.0, inner.y, 200.0, 14.0), 11.0, BOLD, t.subtext, Align::Left);
     let list = Rect::new(inner.x, inner.y + 20.0, inner.w, inner.h - 20.0);
     if d.displays.is_empty() {
         let msg = if d.loaded {
-            "No display here lets apps change its brightness. On external monitors, turn on DDC/CI in the monitor's menu."
+            tr("No display here lets apps change its brightness. On external monitors, turn on DDC/CI in the monitor's menu.")
         } else {
-            "Looking for displays…"
+            tr("Looking for displays…")
         };
         ui.wrap(msg, Rect::new(list.x, list.cy() - 15.0, list.w, 30.0), 11.0, REGULAR, t.subtext);
         return;
@@ -466,7 +467,7 @@ fn brightness_card(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     ui.scroll(id("ctl.bright"), list, content_h, |ui, top| {
         for (i, disp) in displays.iter().enumerate() {
             let y = top + i as f32 * (row_h + 6.0);
-            let name = if disp.internal && !disp.name.to_lowercase().contains("built-in") { format!("Built-in · {}", disp.name) } else { disp.name.clone() };
+            let name = if disp.internal && !disp.name.to_lowercase().contains("built-in") { crate::i18n::tf!("Built-in · {}", "Bawaan · {}", tr(&disp.name)) } else { tr(&disp.name).to_string() };
             ui.text(&name, Rect::new(list.x, y, list.w, 14.0), 11.0, MEDIUM, ui.t.text, Align::Left);
             let line = Rect::new(list.x, y + 14.0, list.w, 22.0);
             let track = Rect::new(line.x, line.y, line.w - 30.0 - 6.0, line.h);
@@ -514,7 +515,7 @@ fn sound_card(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
         }
         let mut names: Vec<String> = devs.iter().map(|x| x.name.clone()).collect();
         if names.is_empty() {
-            names.push(if input { "No microphone" } else { "No speakers" }.into());
+            names.push(if input { tr("No microphone") } else { tr("No speakers") }.into());
         }
         let sel = devs.iter().position(|x| x.is_default).unwrap_or(0);
         let cb = Rect::new(ic.right() + 4.0, y + 1.0, inner.right() - ic.right() - 8.0, 26.0);
@@ -559,7 +560,7 @@ fn sound_card(ui: &mut Ui, s: &mut State, d: &Data, r: Rect) {
     let sessions = d.sessions.clone();
     if sessions.is_empty() {
         if d.loaded {
-            ui.text("No apps are using sound right now", Rect::new(list.x + 2.0, list.y + 10.0, list.w, 16.0), 11.0, REGULAR, t.subtext, Align::Left);
+            ui.text(tr("No apps are using sound right now"), Rect::new(list.x + 2.0, list.y + 10.0, list.w, 16.0), 11.0, REGULAR, t.subtext, Align::Left);
         }
         return;
     }
@@ -673,8 +674,8 @@ fn detail(ui: &mut Ui, s: &mut State, d: &Data, r: Rect, det: Detail) {
         return;
     }
     let (title, on, more, uri) = match det {
-        Detail::Wifi => ("Wi-Fi", d.wifi == Some(true), "More Wi-Fi settings", "ms-settings:network-wifi"),
-        Detail::Bluetooth => ("Bluetooth", d.bt == Some(true), "Pair or connect in Bluetooth settings", "ms-settings:bluetooth"),
+        Detail::Wifi => (tr("Wi-Fi"), d.wifi == Some(true), tr("More Wi-Fi settings"), "ms-settings:network-wifi"),
+        Detail::Bluetooth => ("Bluetooth", d.bt == Some(true), tr("Pair or connect in Bluetooth settings"), "ms-settings:bluetooth"),
     };
     ui.text(title, Rect::new(back.right() + 6.0, inner.y, 200.0, 32.0), 14.0, SEMIBOLD, t.text, Align::Left);
     let available = match det {
@@ -700,13 +701,13 @@ fn detail(ui: &mut Ui, s: &mut State, d: &Data, r: Rect, det: Detail) {
         Detail::Wifi => wifi_list(ui, s, d, list),
         Detail::Bluetooth => {
             let msg = if d.bt.is_none() {
-                Some("This PC has no Bluetooth.")
+                Some(tr("This PC has no Bluetooth."))
             } else if !on {
-                Some("Bluetooth is off. Switch it on above to see your devices.")
+                Some(tr("Bluetooth is off. Switch it on above to see your devices."))
             } else if d.paired_loading && d.paired.is_empty() {
-                Some("Looking for paired devices…")
+                Some(tr("Looking for paired devices…"))
             } else if d.paired.is_empty() {
-                Some("No paired devices yet.")
+                Some(tr("No paired devices yet."))
             } else {
                 None
             };
@@ -721,10 +722,10 @@ fn detail(ui: &mut Ui, s: &mut State, d: &Data, r: Rect, det: Detail) {
                 for (i, b) in devs.iter().enumerate() {
                     let row = Rect::new(list.x, top + i as f32 * 36.0, list.w - 6.0, 34.0);
                     let status = match &busy {
-                        Some((n, true)) if *n == b.name => "Connecting…",
-                        Some((n, false)) if *n == b.name => "Disconnecting…",
-                        _ if b.connected => "Connected · click to disconnect",
-                        _ => "Not connected · click to connect",
+                        Some((n, true)) if *n == b.name => tr("Connecting…"),
+                        Some((n, false)) if *n == b.name => tr("Disconnecting…"),
+                        _ if b.connected => tr("Connected · click to disconnect"),
+                        _ => tr("Not connected · click to connect"),
                     };
                     if choice(ui, row, "Bluetooth", 1.0, &b.name, status, b.connected, true, 0.0) && busy.is_none() {
                         clicked = Some((b.name.clone(), !b.connected));
@@ -768,13 +769,13 @@ fn bt_toggle(s: &State, name: String, connect: bool) {
 fn wifi_list(ui: &mut Ui, s: &mut State, d: &Data, list: Rect) {
     let t = ui.t;
     let msg = if d.wifi.is_none() {
-        Some("This PC has no Wi-Fi.")
+        Some(tr("This PC has no Wi-Fi."))
     } else if d.wifi != Some(true) {
-        Some("Wi-Fi is off. Switch it on above to see networks.")
+        Some(tr("Wi-Fi is off. Switch it on above to see networks."))
     } else if d.networks_loading && d.networks.is_empty() {
-        Some("Looking for networks…")
+        Some(tr("Looking for networks…"))
     } else if d.networks.is_empty() {
-        Some("No networks in range.")
+        Some(tr("No networks in range."))
     } else {
         None
     };
@@ -801,13 +802,13 @@ fn wifi_list(ui: &mut Ui, s: &mut State, d: &Data, list: Rect) {
         for n in &nets {
             let row = Rect::new(list.x, y, list.w - 6.0, 34.0);
             let bars = 0.35 + 0.65 * (n.signal as f32 / 4.0).clamp(0.0, 1.0);
-            let trailing = if n.connected { ui.measure("Disconnect", 11.0, MEDIUM) + 20.0 + 8.0 } else if n.secured { 24.0 } else { 0.0 };
+            let trailing = if n.connected { ui.measure(tr("Disconnect"), 11.0, MEDIUM) + 20.0 + 8.0 } else if n.secured { 24.0 } else { 0.0 };
             let clicked = choice(ui, row, "Wifi", bars, &n.ssid, "", n.connected, !n.connected, trailing);
             if n.connected {
                 let b = Rect::new(row.right() - 6.0 - (trailing - 8.0), row.cy() - 12.0, trailing - 8.0, 24.0);
                 let hov = ui.hovered(b);
                 ui.fill(b, 8.0, if hov { mix(t.surface2, t.text, 0.08) } else { t.surface2 });
-                ui.text("Disconnect", b, 11.0, MEDIUM, t.text, Align::Center);
+                ui.text(tr("Disconnect"), b, 11.0, MEDIUM, t.text, Align::Center);
                 if ui.clicked(b) {
                     disconnect = true;
                 }
@@ -820,19 +821,19 @@ fn wifi_list(ui: &mut Ui, s: &mut State, d: &Data, list: Rect) {
             y += 36.0;
             if let Some((_, j)) = join.as_ref().filter(|(s, _)| *s == n.ssid) {
                 match j {
-                    Join::Connecting => y += note(ui, "Connecting…", list.x, y - 6.0, list.w) - 6.0,
-                    Join::Checking => y += note(ui, "Checking the password…", list.x, y - 6.0, list.w) - 6.0,
+                    Join::Connecting => y += note(ui, tr("Connecting…"), list.x, y - 6.0, list.w) - 6.0,
+                    Join::Checking => y += note(ui, tr("Checking the password…"), list.x, y - 6.0, list.w) - 6.0,
                     Join::Failed(e) => y += note(ui, e, list.x, y - 6.0, list.w) - 6.0,
                     Join::Password { retry } => {
                         // Password line (margin 34,2,6,6): masked box and Connect.
                         let line = Rect::new(list.x + 34.0, y + 2.0 - 2.0, list.w - 34.0 - 6.0 - 6.0, 28.0);
-                        let cw = ui.measure("Connect", 13.0, SEMIBOLD) + 24.0;
+                        let cw = ui.measure(tr("Connect"), 13.0, SEMIBOLD) + 24.0;
                         let (go_r, field) = line.take_right(cw, 6.0);
                         let fid = id("ctl.wifipw");
                         let pw = password_box(ui, fid, field);
                         let hov = ui.hovered(go_r);
                         ui.fill(go_r, 8.0, if hov { mix(t.accent, t.pill, 0.12) } else { t.accent });
-                        ui.text("Connect", go_r, 13.0, SEMIBOLD, t.on_accent, Align::Center);
+                        ui.text(tr("Connect"), go_r, 13.0, SEMIBOLD, t.on_accent, Align::Center);
                         let go = ui.clicked(go_r);
                         let typed = ui.field_text(fid);
                         if let Some(p) = pw.or_else(|| (go && !typed.is_empty()).then_some(typed)) {
@@ -841,7 +842,7 @@ fn wifi_list(ui: &mut Ui, s: &mut State, d: &Data, list: Rect) {
                         }
                         y += 36.0;
                         if *retry {
-                            y += note(ui, "That password didn't work. Try again.", list.x, y - 6.0, list.w) - 6.0;
+                            y += note(ui, tr("That password didn't work. Try again."), list.x, y - 6.0, list.w) - 6.0;
                         }
                     }
                 }
@@ -896,7 +897,7 @@ fn password_box(ui: &mut Ui, fid: u64, r: Rect) -> Option<String> {
         ui.g.stroke_round(r.inset(0.5, 0.5).d2d(), 6.5, ui.c(with_alpha(t.accent, 0.6)), 1.0);
     }
     let inner = r.pad(9.0, 0.0, 9.0, 0.0);
-    let got = ui.text_field(fid, inner, "Network password", 13.0);
+    let got = ui.text_field(fid, inner, tr("Network password"), 13.0);
     // Cover what the kit drew and show dots instead.
     let text = ui.field_text(fid);
     if !text.is_empty() || got.is_some() {

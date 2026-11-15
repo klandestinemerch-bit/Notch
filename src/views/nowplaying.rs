@@ -15,6 +15,7 @@ use crate::model;
 use crate::services::player::{self, Repeat};
 use crate::services::{lyrics, media, settings};
 use crate::ui::{ButtonStyle, Rect, Ui};
+use crate::i18n::tr;
 
 const LYRIC_SIZE: f32 = 14.0;
 const LYRIC_LINE_H: f32 = 19.0;
@@ -133,28 +134,28 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     let from_pc = np.as_ref().is_some_and(|p| p.app == player::APP);
     let status = if np.is_none() {
         if local.adding {
-            "Adding songs…"
+            tr("Adding songs…")
         } else if let Some(e) = local.error.as_deref() {
             e
         } else if local.queue.is_empty() {
-            "Press + or drop songs here to play music from this PC"
+            tr("Press + or drop songs here to play music from this PC")
         } else {
-            "Press play to start your queue"
+            tr("Press play to start your queue")
         }
     } else if let Some(e) = local.error.as_deref().filter(|_| from_pc) {
         e
     } else if !lyrics_on || s.queue_open {
         ""
     } else if loading {
-        "Looking for lyrics…"
+        tr("Looking for lyrics…")
     } else if lines.is_none() {
-        "No synced lyrics for this song"
+        tr("No synced lyrics for this song")
     } else {
         ""
     };
     let (app, title, artist) = match &np {
         Some(p) => (p.app.as_str(), p.title.as_str(), p.artist.as_str()),
-        None => ("", "Nothing playing", ""),
+        None => ("", tr("Nothing playing"), ""),
     };
     // A centred stack: caps (14), title, artist (17), status (4 + 15).
     let title_h = title_size * 1.33;
@@ -164,7 +165,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     }
     let total: f32 = heights.iter().sum();
     let mut y = top.cy() - total / 2.0;
-    ui.text(app, Rect::new(tx, y, tw, 14.0), 11.0, BOLD, t.subtext, Align::Left);
+    ui.text(tr(app), Rect::new(tx, y, tw, 14.0), 11.0, BOLD, t.subtext, Align::Left);
     y += 14.0 + 2.0;
     ui.text(title, Rect::new(tx, y, tw, title_h), title_size, SEMIBOLD, t.text, Align::Left);
     y += title_h;
@@ -277,9 +278,9 @@ fn queue_body(ui: &mut Ui, s: &mut State, col: Rect, q: &player::View, now_t: f6
 
     // ---- header
     let head = Rect::new(view.x, view.y, view.w, 24.0);
-    let mut label = if q.queue.is_empty() { "QUEUE".to_string() } else { format!("QUEUE · {}", q.queue.len()) };
+    let mut label = if q.queue.is_empty() { tr("QUEUE").to_string() } else { crate::i18n::tf!("QUEUE · {}", "ANTREAN · {}", q.queue.len()) };
     if q.adding {
-        label.push_str(" · adding…");
+        label.push_str(tr(" · adding…"));
     }
     ui.text(&label, Rect::new(head.x, head.y, head.w - 4.0 * 26.0, head.h), 11.0, BOLD, t.subtext, Align::Left);
     let button = |i: f32| Rect::new(head.right() - 24.0 - i * 26.0, head.cy() - 12.0, 24.0, 24.0);
@@ -319,10 +320,10 @@ fn queue_body(ui: &mut Ui, s: &mut State, col: Rect, q: &player::View, now_t: f6
     // ---- the songs
     let list = Rect::new(view.x, head.bottom() + 4.0, view.w, view.bottom() - head.bottom() - 4.0);
     if q.queue.is_empty() {
-        let msg = if q.adding { "Adding songs…" } else { "Drop songs or a folder here" };
+        let msg = if q.adding { tr("Adding songs…") } else { tr("Drop songs or a folder here") };
         ui.text(msg, Rect::new(list.x, list.cy() - 26.0, list.w, 18.0), 12.0, REGULAR, t.subtext, Align::Center);
         let b = Rect::new(list.cx() - 55.0, list.cy() + 0.0, 110.0, 28.0);
-        if !q.adding && ui.button(b, "Add songs", ButtonStyle::Normal) {
+        if !q.adding && ui.button(b, tr("Add songs"), ButtonStyle::Normal) {
             crate::bg::spawn(|| player::pick_files(true));
         }
         return;
@@ -487,7 +488,7 @@ fn draw_lyrics(ui: &mut Ui, s: &mut State, col: Rect, lines: &Arc<Vec<lyrics::Li
         }
     }
     ui.pop_clip();
-    ui.text("LRCLIB", Rect::new(view.right() - 60.0, view.bottom() - 12.0, 60.0, 12.0), 10.0, REGULAR, with_alpha(t.subtext, 0.5 * fade), Align::Right);
+    ui.text(tr("LRCLIB"), Rect::new(view.right() - 60.0, view.bottom() - 12.0, 60.0, 12.0), 10.0, REGULAR, with_alpha(t.subtext, 0.5 * fade), Align::Right);
 }
 
 /// The card: surface, or (with art) a left-to-right gradient from the art's tint to the surface.

@@ -65,7 +65,7 @@ pub fn push_alert(a: Alert) {
                 _ if a.key.starts_with("download:") => "Downloads",
                 _ => "FathNotch",
             };
-            notifications::add_local(source, icon, title, sub);
+            notifications::add_local(crate::i18n::tr(source), icon, title, sub);
         }
         // Silent keeps notifications quiet, but an alarm still rings.
         if settings::shared().silent_mode && !a.key.starts_with("alarm:") {
@@ -121,6 +121,7 @@ pub fn start() {
     let _ = clock_secs();
     todos::on_change(bg::refresh);
     settings::on_change(bg::refresh);
+    settings::on_change(crate::i18n::refresh);
     // WinRT start-ups wait on async operations: never on the window (STA) thread.
     bg::spawn(media::start);
     bg::spawn(crate::services::watchers::start);
@@ -188,11 +189,28 @@ fn minute_tick() {
         };
         if due {
             model().prayer_alerted = key;
-            crate::services::sound::chime(&settings::shared().prayer_sound);
+            // The adzan when it's on for this prayer (Settings → Prayer → Adzan), else the prayer sound.
+            let id = prayer::NAMES.iter().position(|n| *n == name).map_or("", |i| prayer::IDS[i]);
+            let adzan = crate::services::adzan::wanted(id);
+            if adzan {
+                let (id, name) = (id.to_string(), name.to_string());
+                bg::spawn(move || {
+                    if !crate::services::adzan::play(&id, &name) {
+                        crate::services::sound::chime(&settings::shared().prayer_sound);
+                    }
+                });
+            } else {
+                crate::services::sound::chime(&settings::shared().prayer_sound);
+            }
+            let sub = if adzan {
+                crate::i18n::tf!("{at} · {} · adzan playing", "{at} · {} · adzan berkumandang", prayer_city())
+            } else {
+                format!("{at} · {}", prayer_city())
+            };
             push_alert(Alert {
                 key: "prayer".into(),
-                kind: AlertKind::Full { icon: "Moon", title: format!("Waktu {name}"), sub: format!("{at} · {}", prayer_city()), open: Some("prayer"), app: None },
-                duration: Duration::from_secs(10),
+                kind: AlertKind::Full { icon: "Moon", title: format!("Waktu {name}"), sub, open: Some("prayer"), app: None },
+                duration: Duration::from_secs(if adzan { 20 } else { 10 }),
             });
         }
     }
@@ -204,7 +222,7 @@ fn minute_tick() {
             model().prayer_lead_alerted = key;
             push_alert(Alert {
                 key: "prayer".into(),
-                kind: AlertKind::Full { icon: "Moon", title: format!("{name} in {mins} min"), sub: format!("{at} · {}", prayer_city()), open: Some("prayer"), app: None },
+                kind: AlertKind::Full { icon: "Moon", title: crate::i18n::tf!("{name} in {mins} min", "{name} {mins} menit lagi"), sub: format!("{at} · {}", prayer_city()), open: Some("prayer"), app: None },
                 duration: Duration::from_secs(6),
             });
         }
@@ -219,10 +237,10 @@ fn ring_alarm(a: &crate::services::alarms::Alarm) {
 
 /// The pop-up of a ringing alarm (× snoozes it, a click opens Snooze / Stop).
 pub fn alarm_alert(a: &crate::services::alarms::Alarm) -> Alert {
-    let title = if a.label.is_empty() { "Alarm".to_string() } else { a.label.clone() };
+    let title = if a.label.is_empty() { crate::i18n::tr("Alarm").to_string() } else { a.label.clone() };
     Alert {
         key: format!("alarm:{}", a.id),
-        kind: AlertKind::Full { icon: "Alarm", title, sub: format!("{} · tap for Snooze or Stop", a.time()), open: Some("alarm"), app: None },
+        kind: AlertKind::Full { icon: "Alarm", title, sub: crate::i18n::tf!("{} · tap for Snooze or Stop", "{} · ketuk untuk Tunda atau Berhenti", a.time()), open: Some("alarm"), app: None },
         duration: Duration::from_secs(6 * 3600),
     }
 }
@@ -234,7 +252,7 @@ pub fn poll_timers() {
         crate::services::sound::play(if msg == "Timer finished" { &s.timer_sound } else { &s.pomodoro_sound });
         push_alert(Alert {
             key: "timer".into(),
-            kind: AlertKind::Full { icon: "Clock", title: msg, sub: "Timers".into(), open: Some("timer"), app: None },
+            kind: AlertKind::Full { icon: "Clock", title: crate::i18n::tr(&msg).to_string(), sub: crate::i18n::tr("Timers").into(), open: Some("timer"), app: None },
             duration: Duration::from_secs(6),
         });
     }
@@ -392,7 +410,7 @@ pub fn activity_changed() -> bool {
 
 pub fn timer_text() -> Option<(String, String)> {
     let t = timers::current()?;
-    Some((t.label().to_string(), t.text()))
+    Some((crate::i18n::tr(t.label()).to_string(), t.text()))
 }
 
 pub fn weather_now() -> Option<weather::Current> {
@@ -435,7 +453,7 @@ fn build_idle_items() -> Vec<IdleItem> {
             "date" => out.push(IdleItem {
                 id: "date",
                 icon: "CalendarDays",
-                value: format!("{} {}", &crate::notch::DAYS[n.dow][..3], n.day),
+                value: format!("{} {}", crate::i18n::day3(n.dow), n.day),
                 accent: false,
             }),
             "weather" => {
@@ -458,7 +476,7 @@ fn build_idle_items() -> Vec<IdleItem> {
             "todos" => {
                 let open = todos::all().iter().filter(|t| !t.done).count();
                 if open > 0 {
-                    out.push(IdleItem { id: "todos", icon: "ListBullet", value: format!("{open} open"), accent: false });
+                    out.push(IdleItem { id: "todos", icon: "ListBullet", value: crate::i18n::tf!("{open} open", "{open} tugas"), accent: false });
                 }
             }
             "battery" => {

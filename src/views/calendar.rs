@@ -6,11 +6,12 @@
 use std::time::Instant;
 
 use crate::gfx::{with_alpha, Align, BOLD, LIGHT, REGULAR, SEMIBOLD};
-use crate::notch::{DAYS, MONTHS};
+use crate::i18n::{day_name, month_name};
 use crate::services::{calendar, todos};
 use crate::ui::{id, Key, Rect, Ui};
 
 use super::picker;
+use crate::i18n::tr;
 
 const TIME_ID: u64 = id("calendar.time");
 const TITLE_ID: u64 = id("calendar.title");
@@ -177,7 +178,7 @@ fn month_card(ui: &mut Ui, s: &mut State, card: Rect) {
     // Header: "November 2026", prev · today · next.
     let (head, rest) = inner.take_top(24.0, 4.0);
     let (y, m, _) = calendar::civil_from_days(s.month);
-    let month_name = MONTHS[m as usize - 1];
+    let month_name = month_name(m as usize);
     let hx = head.x + 2.0;
     ui.text(month_name, Rect::new(hx, head.y, 160.0, head.h), 14.0, SEMIBOLD, t.text, Align::Left);
     let mw = ui.measure(month_name, 14.0, SEMIBOLD);
@@ -202,7 +203,7 @@ fn month_card(ui: &mut Ui, s: &mut State, card: Rect) {
     // Weekdays, Monday first.
     let (wk, grid) = rest.take_top(14.0, 2.0);
     let cw = wk.w / 7.0;
-    for (i, name) in ["MO", "TU", "WE", "TH", "FR", "SA", "SU"].iter().enumerate() {
+    for (i, name) in [tr("MO"), tr("TU"), tr("WE"), tr("TH"), tr("FR"), tr("SA"), tr("SU")].iter().enumerate() {
         let c = if i >= 5 { with_alpha(t.subtext, 0.6) } else { t.subtext };
         ui.text(name, Rect::new(wk.x + i as f32 * cw, wk.y, cw, wk.h), 10.0, BOLD, c, Align::Center);
     }
@@ -317,23 +318,23 @@ fn day_panel(ui: &mut Ui, s: &mut State, r: Rect) {
         let nw = ui.measure(&num, 34.0, LIGHT).max(40.0);
         ui.text(&num, Rect::new(head.x, head.y - 2.0, nw + 4.0, head.h), 34.0, LIGHT, if is_today { t.accent } else { t.text }, Align::Left);
         let tx = head.x + nw + 12.0;
-        let dow = DAYS[(calendar::weekday(s.selected) as usize + 1) % 7];
-        let month = MONTHS[m as usize - 1];
-        ui.text(if is_today { "Today" } else { dow }, Rect::new(tx, head.y + 2.0, 300.0, 20.0), 14.0, SEMIBOLD, t.text, Align::Left);
+        let dow = day_name((calendar::weekday(s.selected) as usize + 1) % 7);
+        let month = month_name(m as usize);
+        ui.text(if is_today { tr("Today") } else { dow }, Rect::new(tx, head.y + 2.0, 300.0, 20.0), 14.0, SEMIBOLD, t.text, Align::Left);
         let count = match items.len() {
-            0 => "No events".to_string(),
-            1 => "1 event".to_string(),
-            n => format!("{n} events"),
+            0 => tr("No events").to_string(),
+            1 => tr("1 event").to_string(),
+            n => crate::i18n::tf!("{n} events", "{n} acara"),
         };
-        let sub = if is_today { format!("{dow}, {month} {d} · {count}") } else { format!("{month} {d}, {y} · {count}") };
+        let sub = if is_today { crate::i18n::tf!("{dow}, {month} {d} · {count}", "{dow}, {d} {month} · {count}") } else { crate::i18n::tf!("{month} {d}, {y} · {count}", "{d} {month} {y} · {count}") };
         ui.text(&sub, Rect::new(tx, head.y + 22.0, 320.0, 18.0), 12.0, REGULAR, t.subtext, Align::Left);
         if !is_today {
-            let cw = ui.measure("Today", 11.0, SEMIBOLD) + 35.0;
+            let cw = ui.measure(tr("Today"), 11.0, SEMIBOLD) + 35.0;
             let chip = Rect::new(head.right() - cw, head.cy() - 11.0, cw, 22.0);
             let hov = ui.hovered(chip);
             ui.fill(chip, 11.0, if hov { with_alpha(t.accent_soft, 0.8) } else { t.accent_soft });
             ui.icon("ChevronLeft", chip.x + 15.0, chip.cy(), 10.0, t.accent);
-            ui.text("Today", Rect::new(chip.x + 23.0, chip.y, cw - 23.0, chip.h), 11.0, SEMIBOLD, t.accent, Align::Left);
+            ui.text(tr("Today"), Rect::new(chip.x + 23.0, chip.y, cw - 23.0, chip.h), 11.0, SEMIBOLD, t.accent, Align::Left);
             if ui.clicked(chip) {
                 go_today(s);
             }
@@ -343,8 +344,8 @@ fn day_panel(ui: &mut Ui, s: &mut State, r: Rect) {
             let cy = list.cy() - 6.0;
             ui.g.fill_circle(list.cx(), cy - 18.0, 18.0, ui.c(t.accent_soft));
             ui.icon("CalendarDays", list.cx(), cy - 18.0, 16.0, t.accent);
-            ui.text("No events", Rect::new(list.x, cy + 7.0, list.w, 18.0), 13.0, SEMIBOLD, t.text, Align::Center);
-            ui.text("Add one below", Rect::new(list.x, cy + 24.0, list.w, 16.0), 11.0, REGULAR, t.subtext, Align::Center);
+            ui.text(tr("No events"), Rect::new(list.x, cy + 7.0, list.w, 18.0), 13.0, SEMIBOLD, t.text, Align::Center);
+            ui.text(tr("Add one below"), Rect::new(list.x, cy + 24.0, list.w, 16.0), 11.0, REGULAR, t.subtext, Align::Center);
         } else {
             agenda(ui, s, list, &items, is_today);
         }
@@ -373,7 +374,7 @@ fn agenda(ui: &mut Ui, s: &mut State, list: Rect, items: &[Item], is_today: bool
                 ui.alpha = base * 0.5;
             }
             let hov = ui.hovered(row);
-            ui.text(&it.time.map_or("All day".into(), |(h, m)| format!("{h:02}:{m:02}")), Rect::new(row.x, row.y + 2.0, 46.0, 28.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
+            ui.text(&it.time.map_or(tr("All day").into(), |(h, m)| format!("{h:02}:{m:02}")), Rect::new(row.x, row.y + 2.0, 46.0, 28.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
             // Node and the connector down to the next one.
             let nx = row.x + 46.0 + 9.0;
             if k + 1 < count {
@@ -397,7 +398,7 @@ fn agenda(ui: &mut Ui, s: &mut State, list: Rect, items: &[Item], is_today: bool
             }
             if is_next {
                 let (h, m) = it.time.unwrap_or((0, 0));
-                let label = format!("UP NEXT · {}", next_label((h * 60 + m) as i64 - now_min));
+                let label = crate::i18n::tf!("UP NEXT · {}", "BERIKUTNYA · {}", next_label((h * 60 + m) as i64 - now_min));
                 let w = ui.measure(&label, 11.0, BOLD) + 14.0;
                 let chip = Rect::new(right - 2.0 - w, card.cy() - 9.0, w, 18.0);
                 right = chip.x - 8.0;
@@ -416,11 +417,11 @@ fn agenda(ui: &mut Ui, s: &mut State, list: Rect, items: &[Item], is_today: bool
 
 fn next_label(mins: i64) -> String {
     if mins < 1 {
-        "NOW".into()
+        tr("NOW").into()
     } else if mins < 60 {
-        format!("IN {mins}M")
+        crate::i18n::tf!("IN {mins}M", "{mins} MNT LAGI")
     } else if mins % 60 == 0 {
-        format!("IN {}H", mins / 60)
+        crate::i18n::tf!("IN {}H", "{} JAM LAGI", mins / 60)
     } else {
         format!("IN {}H {}M", mins / 60, mins % 60)
     }
@@ -462,7 +463,7 @@ fn composer_pill(ui: &mut Ui, s: &mut State, r: Rect) {
         ui.fill(Rect::new(time_r.x - 2.0, r.cy() - 12.0, time_r.w, 24.0), 6.0, with_alpha(t.danger, 0.22));
     }
     let mut add = false;
-    if let Some(v) = ui.text_field(TIME_ID, time_r, "Time", 13.0) {
+    if let Some(v) = ui.text_field(TIME_ID, time_r, tr("Time"), 13.0) {
         ui.set_field_text(TIME_ID, &v);
         add = true;
     }
@@ -470,7 +471,7 @@ fn composer_pill(ui: &mut Ui, s: &mut State, r: Rect) {
 
     let plus = Rect::new(r.right() - 35.0, r.cy() - 15.0, 30.0, 30.0);
     let title_r = Rect::new(time_r.right() + 15.0, r.y, plus.x - time_r.right() - 23.0, r.h);
-    if let Some(v) = ui.text_field(TITLE_ID, title_r, "New event…", 13.0) {
+    if let Some(v) = ui.text_field(TITLE_ID, title_r, tr("New event…"), 13.0) {
         ui.set_field_text(TITLE_ID, &v);
         add = true;
     }
@@ -547,7 +548,7 @@ fn picker(ui: &mut Ui, s: &mut State, area: Rect) {
     }
     ui.fill(area, 0.0, t.pill);
     let mut c = s.dial;
-    let picked = picker::dial(ui, &mut c, area, Some("All day"));
+    let picked = picker::dial(ui, &mut c, area, Some(tr("All day")));
     s.dial = c;
     match picked {
         picker::Picked::None => {}

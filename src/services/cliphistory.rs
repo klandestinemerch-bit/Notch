@@ -76,7 +76,7 @@ impl Clip {
                 .map(|f| f.rsplit(['\\', '/']).next().unwrap_or(f).to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
-            Kind::Image => "Image".into(),
+            Kind::Image => crate::i18n::tr("Image").into(),
             _ => self.text.as_deref().unwrap_or("").trim().replace(['\r', '\n', '\t'], " "),
         };
         if s.chars().count() > 240 {

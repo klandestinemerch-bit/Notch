@@ -21,6 +21,7 @@ use windows::Networking::NetworkOperators::{
 };
 use windows::Security::Credentials::PasswordCredential;
 use windows::Win32::System::Registry::{RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_DWORD, RRF_RT_REG_DWORD};
+use crate::i18n::tr;
 
 // ---------------------------------------------------------------- radios (Wi-Fi / Bluetooth on-off)
 
@@ -170,7 +171,7 @@ pub fn networks() -> Vec<Network> {
 /// Connects to `ssid` and reconnects automatically later. Saved and open networks need no password.
 /// Errors: "password" when the network needs a (correct) password, otherwise a short reason.
 pub fn connect(ssid: &str, password: Option<&str>) -> Result<(), String> {
-    let adapter = adapter().ok_or("Wi-Fi isn't available")?;
+    let adapter = adapter().ok_or(tr("Wi-Fi isn't available"))?;
     let mut found = report(&adapter).remove(ssid);
     if found.is_none() {
         if let Ok(op) = adapter.ScanAsync() {
@@ -178,7 +179,7 @@ pub fn connect(ssid: &str, password: Option<&str>) -> Result<(), String> {
         }
         found = report(&adapter).remove(ssid);
     }
-    let network = found.ok_or("Out of range")?;
+    let network = found.ok_or(tr("Out of range"))?;
     let result = match password {
         Some(p) => {
             let cred = PasswordCredential::new().map_err(|e| e.message())?;
@@ -193,11 +194,11 @@ pub fn connect(ssid: &str, password: Option<&str>) -> Result<(), String> {
     match result {
         WiFiConnectionStatus::Success => Ok(()),
         WiFiConnectionStatus::InvalidCredential => Err("password".into()),
-        WiFiConnectionStatus::Timeout => Err("The network didn't answer".into()),
-        WiFiConnectionStatus::NetworkNotAvailable => Err("Out of range".into()),
-        WiFiConnectionStatus::AccessRevoked => Err("Wi-Fi access is turned off for apps".into()),
-        WiFiConnectionStatus::UnsupportedAuthenticationProtocol => Err("This network's security isn't supported".into()),
-        _ => Err("Couldn't connect".into()),
+        WiFiConnectionStatus::Timeout => Err(tr("The network didn't answer").into()),
+        WiFiConnectionStatus::NetworkNotAvailable => Err(tr("Out of range").into()),
+        WiFiConnectionStatus::AccessRevoked => Err(tr("Wi-Fi access is turned off for apps").into()),
+        WiFiConnectionStatus::UnsupportedAuthenticationProtocol => Err(tr("This network's security isn't supported").into()),
+        _ => Err(tr("Couldn't connect").into()),
     }
 }
 
@@ -211,12 +212,12 @@ pub fn disconnect() {
 pub fn connected_name() -> Option<String> {
     let profile = NetworkInformation::GetInternetConnectionProfile().ok()?;
     if profile.IsWlanConnectionProfile().unwrap_or(false) {
-        return Some(wlan_ssid(&profile).unwrap_or_else(|| "Wi-Fi".into()));
+        return Some(wlan_ssid(&profile).unwrap_or_else(|| tr("Wi-Fi").into()));
     }
     if profile.IsWwanConnectionProfile().unwrap_or(false) {
-        return Some("Cellular".into());
+        return Some(tr("Cellular").into());
     }
-    Some("Ethernet".into())
+    Some(tr("Ethernet").into())
 }
 
 // ---------------------------------------------------------------- Bluetooth devices
@@ -307,7 +308,7 @@ pub fn hotspot_clients() -> u32 {
 }
 
 pub fn set_hotspot(on: bool) -> Result<(), String> {
-    let manager = tethering().ok_or("No internet connection to share")?;
+    let manager = tethering().ok_or(tr("No internet connection to share"))?;
     let op = if on { manager.StartTetheringAsync() } else { manager.StopTetheringAsync() };
     let result = op.and_then(|o| o.get()).map_err(|e| e.message())?;
     match result.Status() {
@@ -318,11 +319,11 @@ pub fn set_hotspot(on: bool) -> Result<(), String> {
                 return Err(detail);
             }
             Err(match status {
-                Ok(TetheringOperationStatus::WiFiDeviceOff) => "Wi-Fi is off".into(),
-                Ok(TetheringOperationStatus::BluetoothDeviceOff) => "Bluetooth is off".into(),
-                Ok(TetheringOperationStatus::OperationInProgress) => "Already switching".into(),
-                Ok(TetheringOperationStatus::EntitlementCheckFailure) => "Your carrier doesn't allow sharing".into(),
-                _ => "Windows couldn't switch the hotspot".into(),
+                Ok(TetheringOperationStatus::WiFiDeviceOff) => tr("Wi-Fi is off").into(),
+                Ok(TetheringOperationStatus::BluetoothDeviceOff) => tr("Bluetooth is off").into(),
+                Ok(TetheringOperationStatus::OperationInProgress) => tr("Already switching").into(),
+                Ok(TetheringOperationStatus::EntitlementCheckFailure) => tr("Your carrier doesn't allow sharing").into(),
+                _ => tr("Windows couldn't switch the hotspot").into(),
             })
         }
     }

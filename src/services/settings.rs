@@ -145,8 +145,17 @@ pub struct Settings {
     pub prayer_asr_hanafi: bool,
     pub prayer_lead_min: i32,
     pub prayer_sound: String,
+    /// The adzan at prayer times (services/adzan.rs): on/off, its audio file, Subuh's own file (empty = the
+    /// same), which prayers (ids as in prayer::IDS) and the volume 0..1.
+    pub adzan_enabled: bool,
+    pub adzan_file: String,
+    pub adzan_fajr_file: String,
+    pub adzan_prayers: Vec<String>,
+    pub adzan_volume: f64,
 
     pub display_name: String,
+    /// Interface language: "" = as Windows, "en", "id" (see `i18n`).
+    pub language: String,
     pub lyrics_enabled: bool,
     /// Action id → gesture such as "Ctrl+Alt+N"; empty = disabled.
     pub hotkeys: BTreeMap<String, String>,
@@ -267,7 +276,13 @@ impl Default for Settings {
             prayer_asr_hanafi: false,
             prayer_lead_min: 10,
             prayer_sound: s("Chime"),
+            adzan_enabled: false,
+            adzan_file: s(""),
+            adzan_fajr_file: s(""),
+            adzan_prayers: ["fajr", "dhuhr", "asr", "maghrib", "isha"].iter().map(|x| x.to_string()).collect(),
+            adzan_volume: 0.8,
             display_name: s(""),
+            language: s(""),
             lyrics_enabled: true,
             hotkeys: [("toggle", "Ctrl+Alt+N"), ("clipboard", ""), ("teleprompter", "")]
                 .into_iter()

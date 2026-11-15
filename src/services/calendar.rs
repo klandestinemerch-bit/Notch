@@ -45,7 +45,7 @@ impl Event {
     pub fn time_label(&self) -> String {
         match self.time {
             Some((h, m)) => format!("{h:02}:{m:02}"),
-            None => "All day".into(),
+            None => crate::i18n::tr("All day").into(),
         }
     }
 }

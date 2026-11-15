@@ -10,6 +10,7 @@ use crate::bg;
 use crate::gfx::{color, Align, BOLD, LIGHT, MEDIUM, SEMIBOLD};
 use crate::services::{settings, weather};
 use crate::ui::{id, Rect, Ui};
+use crate::i18n::tr;
 
 type Forecast = (weather::Current, Vec<weather::Hour>, Vec<weather::Day>);
 
@@ -46,7 +47,7 @@ fn load(s: &mut State, new_place: bool) {
         if new_place {
             d.forecast = None;
         }
-        d.status = if d.forecast.is_none() { "Loading…".into() } else { "Updating…".into() };
+        d.status = if d.forecast.is_none() { tr("Loading…").into() } else { tr("Updating…").into() };
     }
     s.last_fetch = Some(Instant::now());
     let (city, f) = key();
@@ -60,10 +61,10 @@ fn load(s: &mut State, new_place: bool) {
             Some(fc) => {
                 d.forecast = Some(Arc::new(fc));
                 let n = crate::notch::now();
-                d.status = format!("Updated {:02}:{:02}", n.hour, n.minute);
+                d.status = crate::i18n::tf!("Updated {:02}:{:02}", "Diperbarui {:02}:{:02}", n.hour, n.minute);
             }
-            None if city.is_empty() => d.status = "Type a city and press Enter".into(),
-            None => d.status = format!("Couldn't load weather for \"{city}\""),
+            None if city.is_empty() => d.status = tr("Type a city and press Enter").into(),
+            None => d.status = crate::i18n::tf!("Couldn't load weather for \"{city}\"", "Tidak bisa memuat cuaca untuk \"{city}\""),
         }
     });
 }
@@ -103,7 +104,7 @@ pub fn draw(ui: &mut Ui, s: &mut State, r: Rect, _go: &mut Option<&'static str>)
     ui.fill(field, 9.0, t.surface2);
     ui.g.stroke_round(field.inset(0.5, 0.5).d2d(), 8.5, ui.c(t.stroke), 1.0);
     ui.icon("MapPin", field.x + 18.5, field.cy(), 15.0, t.subtext);
-    if let Some(city) = ui.text_field(id(FIELD), field.pad(36.0, 0.0, 10.0, 0.0), "City", 13.0) {
+    if let Some(city) = ui.text_field(id(FIELD), field.pad(36.0, 0.0, 10.0, 0.0), tr("City"), 13.0) {
         ui.set_field_text(id(FIELD), &city);
         ui.st.focus = 0;
         settings::update_quiet(|x| x.weather_city = city);
@@ -142,13 +143,13 @@ fn current(ui: &mut Ui, r: Rect, w: &weather::Current, today: Option<&weather::D
     let temp = weather::degrees(w.temp);
     let tw = ui.measure(&temp, 40.0, LIGHT);
     ui.text(&temp, Rect::new(x, r.y + 9.0, tw + 6.0, 54.0), 40.0, LIGHT, t.text, Align::Left);
-    ui.text(weather::describe(w.code), Rect::new(x + tw + 10.0, r.y + 36.0, 220.0, 20.0), 14.0, MEDIUM, t.text, Align::Left);
+    ui.text(crate::i18n::weather(weather::describe(w.code)), Rect::new(x + tw + 10.0, r.y + 36.0, 220.0, 20.0), 14.0, MEDIUM, t.text, Align::Left);
     ui.text(&w.city, Rect::new(x, r.y + 69.0, 340.0, 18.0), 12.0, SEMIBOLD, t.subtext, Align::Left);
 
     let unit = if settings::shared().use_fahrenheit { "mph" } else { "km/h" };
     let range = today.map_or("–".to_string(), |d| format!("{} / {}", weather::degrees(d.max), weather::degrees(d.min)));
     let items: [(&'static str, String); 4] = [
-        ("Fire", format!("Feels {}", weather::degrees(w.feels))),
+        ("Fire", crate::i18n::tf!("Feels {}", "Terasa {}", weather::degrees(w.feels))),
         ("Drop", format!("{:.0}%", w.humidity)),
         ("Cloud", format!("{:.0} {unit}", w.wind)),
         ("ArrowsUpDown", range),
@@ -171,7 +172,7 @@ fn daily_strip(ui: &mut Ui, r: Rect, days: &[weather::Day]) {
     let t = ui.t;
     let n = days.len().clamp(1, 7);
     for (i, (d, c)) in days.iter().zip(r.columns(n, 4.0)).enumerate() {
-        let label = if i == 0 { "TODAY".to_string() } else { day_name(&d.date).to_uppercase() };
+        let label = if i == 0 { tr("TODAY").to_string() } else { day_name(&d.date).to_uppercase() };
         ui.text(&label, Rect::new(c.x, c.y + 7.0, c.w, 18.0), 11.0, BOLD, t.subtext, Align::Center);
         glyph(ui, c.cx(), c.y + 45.0, 30.0, d.code, true);
         ui.text(&weather::degrees(d.max), Rect::new(c.x, c.y + 64.0, c.w, 20.0), 14.0, SEMIBOLD, t.text, Align::Center);
@@ -270,5 +271,5 @@ fn day_name(date: &str) -> &'static str {
         y -= 1;
     }
     let dow = (y + y / 4 - y / 100 + y / 400 + T[((m - 1) as usize).min(11)] + d).rem_euclid(7);
-    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dow as usize]
+    crate::i18n::day3(dow as usize)
 }

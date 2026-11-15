@@ -7,6 +7,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::services::store;
+use crate::i18n::tr;
 
 const FILE: &str = "alarms.json";
 
@@ -33,11 +34,11 @@ impl Alarm {
         d.sort_unstable();
         d.dedup();
         match d.as_slice() {
-            [] => "Once".into(),
-            [0, 1, 2, 3, 4, 5, 6] => "Every day".into(),
-            [1, 2, 3, 4, 5] => "Weekdays".into(),
-            [0, 6] => "Weekends".into(),
-            _ => d.iter().map(|&i| &crate::notch::DAYS[i as usize % 7][..3]).collect::<Vec<_>>().join(", "),
+            [] => tr("Once").into(),
+            [0, 1, 2, 3, 4, 5, 6] => tr("Every day").into(),
+            [1, 2, 3, 4, 5] => tr("Weekdays").into(),
+            [0, 6] => tr("Weekends").into(),
+            _ => d.iter().map(|&i| crate::i18n::day3(i as usize)).collect::<Vec<_>>().join(", "),
         }
     }
 
