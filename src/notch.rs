@@ -122,6 +122,12 @@ pub struct Notch {
     tab_hits: Vec<(Rect, &'static str)>,
     pin_hit: Rect,
     panel: (f32, f32, f32), // origin x, origin y, scale
+    /// Where the closed notch sits on the canvas (Settings → Display "Position").
+    pub anchor: Anchor,
+    /// Move mode (since when): the closed notch waits to be dragged somewhere else.
+    pub moving: Option<Instant>,
+    /// Being dragged: the pointer's offset (px) from the notch's centre and top when it was caught.
+    pub drag: Option<(f64, f64)>,
 }
 
 fn clamp01(v: f32) -> f32 {
@@ -248,23 +254,52 @@ fn face(kind: u8, el: f32) -> Face {
     }
 }
 
-/// A cute white cat face: round-ish, gently slanted eyes with big dark pupils (no highlights).
-/// `kind` picks one of the `EYE_KINDS` animations.
-fn draw_eyes(g: &Gfx, r: &Rect, el: f32, a: f32, t: &Theme, kind: u8) {
+/// Settings → Display "Eye animation": the animation it names, None for "mix" (take turns).
+fn eye_anim(name: &str) -> Option<u8> {
+    match name {
+        "look" => Some(0),
+        "sleepy" => Some(1),
+        "wink" => Some(2),
+        "curious" => Some(3),
+        _ => None,
+    }
+}
+
+/// Settings → Display "Eye colour" (`theme` is the scheme's text colour: white on the dark pill).
+fn eye_color(name: &str, t: &Theme) -> crate::gfx::Color {
+    match name {
+        "accent" => t.accent,
+        "yellow" => color(0xFFD45A, 1.0),
+        "green" => color(0x6EE7A0, 1.0),
+        "blue" => color(0x6CC4FF, 1.0),
+        "pink" => color(0xFF9AD0, 1.0),
+        _ => t.text,
+    }
+}
+
+/// The idle eyes in the notch rect `r`, `el` seconds into animation `kind`, in the look and colour picked in
+/// Settings → Display (cat, round, robot or dots). `look` (−1…1 each way) overrides where they look (following
+/// the pointer). Also draws the preview in Settings.
+pub fn draw_eyes(g: &Gfx, r: &Rect, el: f32, a: f32, t: &Theme, kind: u8, look: Option<(f32, f32)>) {
     let k = EYES_SECS;
-    let f = face(kind, el);
+    let s = settings::shared();
+    let mut f = face(kind, el);
+    if let Some(l) = look {
+        f.look = l;
+    }
     let fade = clamp01(el / 0.2).min(clamp01((k - el) / 0.2));
     let cy = r.cy();
     let size = (r.h * 0.26).clamp(7.0, 11.0);
-    // White on the black pill (the scheme's text colour, so light schemes stay readable).
-    let white = with_alpha(t.text, a * fade);
+    let white = with_alpha(eye_color(&s.eyes_color, t), a * fade);
+    // Pupils: the pill's colour (dark on the dark pill), so light schemes stay readable.
     let dark = with_alpha(t.pill, a * fade);
     let p = crate::gfx::pt;
+    let style = s.eyes_style.as_str();
     let w = size * 1.1; // half width of an eye
     for (i, side) in [-1.0f32, 1.0].into_iter().enumerate() {
         let cx = r.cx() + side * size * 2.0;
         if f.arc[i] != 0.0 {
-            // Shut: "^" (happy) or "‿" (asleep).
+            // Shut: "^" (happy) or "‿" (asleep), in every look.
             let up = f.arc[i] > 0.0;
             let (ey, cy2) = if up { (cy + size * 0.3, cy - size * 0.7) } else { (cy - size * 0.1, cy + size * 0.8) };
             if let Some(geo) = g.path(|sink| unsafe {
@@ -277,32 +312,68 @@ fn draw_eyes(g: &Gfx, r: &Rect, el: f32, a: f32, t: &Theme, kind: u8) {
             }
             continue;
         }
-
         let open = f.open[i].max(0.06);
-        let h = size * 0.95 * open; // half height: nearly round when open
-        // A gentle slant: outer corner a little higher than the inner one.
-        let inner = (cx - side * w, cy + size * 0.04);
-        let outer = (cx + side * w, cy - size * 0.14 * open.max(0.3));
-        if let Some(geo) = g.path(|sink| unsafe {
-            use windows::Win32::Graphics::Direct2D::Common::{D2D1_BEZIER_SEGMENT, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED};
-            sink.BeginFigure(p(inner.0, inner.1), D2D1_FIGURE_BEGIN_FILLED);
-            sink.AddBezier(&D2D1_BEZIER_SEGMENT { point1: p(inner.0, cy - h * 1.3), point2: p(outer.0, outer.1 - h * 1.25), point3: p(outer.0, outer.1) });
-            sink.AddBezier(&D2D1_BEZIER_SEGMENT { point1: p(outer.0, cy + h * 1.3), point2: p(inner.0, cy + h * 1.3), point3: p(inner.0, inner.1) });
-            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
-        }) {
-            g.fill_geometry(&geo.into(), white);
-        }
-        // Pupil, kept inside the eye.
-        if open > 0.3 {
-            let ox = f.look.0 * w * 0.3;
-            let room = h * (1.0 - (ox / w).powi(2)).max(0.0).sqrt();
-            let ry = (h * 0.8).min(room * 0.9);
-            let py = cy - size * 0.02 + f.look.1 * (h - ry).max(0.0);
-            let rx = (size * f.pupil).min(ry);
-            g.fill_ellipse(D2D1_ELLIPSE { point: p(cx + ox, py), radiusX: rx, radiusY: ry }, dark);
+        match style {
+            // Round: big circles with a dark pupil and a little shine.
+            "round" => {
+                let rx = size * 0.95;
+                let ry = size * 0.95 * open;
+                g.fill_ellipse(D2D1_ELLIPSE { point: p(cx, cy), radiusX: rx, radiusY: ry }, white);
+                if open > 0.3 {
+                    let pr = (size * (f.pupil + 0.05)).min(ry * 0.8);
+                    let px = cx + f.look.0 * (rx - pr) * 0.75;
+                    let py = cy + f.look.1 * (ry - pr).max(0.0) * 0.75;
+                    g.fill_ellipse(D2D1_ELLIPSE { point: p(px, py), radiusX: pr, radiusY: pr }, dark);
+                    let shine = pr * 0.34;
+                    g.fill_ellipse(D2D1_ELLIPSE { point: p(px - pr * 0.35, py - pr * 0.38), radiusX: shine, radiusY: shine }, white);
+                }
+            }
+            // Robot: glowing rounded panels that slide to look, no pupils.
+            "robot" => {
+                let hw = w * 0.82;
+                let hh = (size * 0.95 * open).max(1.2);
+                let ox = f.look.0 * w * 0.35;
+                let oy = f.look.1 * size * 0.3;
+                g.fill_round(Rect::new(cx - hw + ox, cy - hh + oy, hw * 2.0, hh * 2.0).d2d(), (size * 0.3).min(hh), white);
+            }
+            // Dots: two plain dots, like a little emoticon.
+            "dots" => {
+                let rr = size * 0.6;
+                let ox = f.look.0 * w * 0.45;
+                let oy = f.look.1 * size * 0.35;
+                g.fill_ellipse(D2D1_ELLIPSE { point: p(cx + ox, cy + oy), radiusX: rr, radiusY: (rr * open).max(1.0) }, white);
+            }
+            // Cat: round-ish, gently slanted eyes with big dark pupils (no highlights).
+            _ => {
+                let h = size * 0.95 * open; // half height: nearly round when open
+                // A gentle slant: outer corner a little higher than the inner one.
+                let inner = (cx - side * w, cy + size * 0.04);
+                let outer = (cx + side * w, cy - size * 0.14 * open.max(0.3));
+                if let Some(geo) = g.path(|sink| unsafe {
+                    use windows::Win32::Graphics::Direct2D::Common::{D2D1_BEZIER_SEGMENT, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED};
+                    sink.BeginFigure(p(inner.0, inner.1), D2D1_FIGURE_BEGIN_FILLED);
+                    sink.AddBezier(&D2D1_BEZIER_SEGMENT { point1: p(inner.0, cy - h * 1.3), point2: p(outer.0, outer.1 - h * 1.25), point3: p(outer.0, outer.1) });
+                    sink.AddBezier(&D2D1_BEZIER_SEGMENT { point1: p(outer.0, cy + h * 1.3), point2: p(inner.0, cy + h * 1.3), point3: p(inner.0, inner.1) });
+                    sink.EndFigure(D2D1_FIGURE_END_CLOSED);
+                }) {
+                    g.fill_geometry(&geo.into(), white);
+                }
+                // Pupil, kept inside the eye.
+                if open > 0.3 {
+                    let ox = f.look.0 * w * 0.3;
+                    let room = h * (1.0 - (ox / w).powi(2)).max(0.0).sqrt();
+                    let ry = (h * 0.8).min(room * 0.9);
+                    let py = cy - size * 0.02 + f.look.1 * (h - ry).max(0.0);
+                    let rx = (size * f.pupil).min(ry);
+                    g.fill_ellipse(D2D1_ELLIPSE { point: p(cx + ox, py), radiusX: rx, radiusY: ry }, dark);
+                }
+            }
         }
     }
 }
+
+/// How long one peek of the eyes lasts (the Settings preview loops it).
+pub const EYES_LOOP_SECS: f32 = EYES_SECS;
 
 /// Switching tabs from the keyboard. Ctrl+←/→ and Ctrl+1…9 always work, even while typing; plain ←/→ and
 /// 1…9 work while no text field has focus (in a note or a search box they keep typing). The keys used here
@@ -393,6 +464,18 @@ fn music_text() -> String {
 }
 
 /// Closed size from Settings → Display "Notch size".
+/// The closed notch's height (DIP) at the chosen size.
+pub fn idle_height() -> f32 {
+    idle_size().1
+}
+
+/// The closed notch's width now (DIP).
+impl Notch {
+    pub fn width_now(&self) -> f32 {
+        self.width.value
+    }
+}
+
 fn idle_size() -> (f32, f32) {
     match settings::shared().notch_size.as_str() {
         "ExtraSmall" => (128.0, 29.0),
@@ -406,6 +489,69 @@ fn idle_size() -> (f32, f32) {
 pub fn theme() -> Theme {
     crate::theme::current()
 }
+
+/// Which edge of the closed notch `Anchor::x` holds (it grows from there).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Side {
+    Center,
+    Left,
+    Right,
+}
+
+/// Where the closed notch sits on the canvas (DIP): `x` is its left edge, centre or right edge (`side`),
+/// `y` its top. The open panel always comes out to the canvas's middle, near the notch.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Anchor {
+    pub x: f32,
+    pub y: f32,
+    pub side: Side,
+    /// Away from the monitor's top edge: it floats as a capsule (it can't hang from the edge).
+    pub floating: bool,
+}
+
+impl Default for Anchor {
+    fn default() -> Self {
+        Anchor { x: CANVAS_W / 2.0, y: 0.0, side: Side::Center, floating: false }
+    }
+}
+
+/// From a top corner to the notch's body (the ears hang a little further out).
+const CORNER_GAP: f32 = 18.0 + EAR_OPEN;
+
+/// Settings → Display "Position": where the window goes on a monitor (`m`: left, top, right, bottom in px)
+/// and where the closed notch sits in it. `pos` is "center", "left", "right" or "free" (`fx` the notch's
+/// centre and `fy` its top as fractions of the monitor). The canvas always stays on the monitor, so the open
+/// panel does too; `idle_h` keeps a free notch's bottom on screen.
+pub fn position(m: (i32, i32, i32, i32), scale: f32, px_w: i32, px_h: i32, pos: &str, fx: f64, fy: f64, idle_h: f32) -> (i32, i32, Anchor) {
+    let (l, t, r, b) = m;
+    let (mw, mh) = ((r - l).max(1), (b - t).max(1));
+    match pos {
+        "left" => (l, t, Anchor { x: CORNER_GAP, y: 0.0, side: Side::Left, floating: false }),
+        "right" => (r - px_w, t, Anchor { x: CANVAS_W - CORNER_GAP, y: 0.0, side: Side::Right, floating: false }),
+        "free" => {
+            let cx = l as f64 + fx.clamp(0.0, 1.0) * mw as f64;
+            let lowest = (b as f64 - (idle_h + GAP + 4.0) as f64 * scale as f64).max(t as f64);
+            let top = (t as f64 + fy.clamp(0.0, 1.0) * mh as f64).min(lowest);
+            let wx = ((cx - px_w as f64 / 2.0).round() as i32).clamp(l.min(r - px_w), (r - px_w).max(l));
+            let wy = (top.round() as i32).clamp(t.min(b - px_h), (b - px_h).max(t));
+            let ax = ((cx - wx as f64) / scale as f64) as f32;
+            let ay = (((top - wy as f64) / scale as f64) as f32).max(0.0);
+            (wx, wy, Anchor { x: ax, y: ay, side: Side::Center, floating: top > t as f64 + 0.5 })
+        }
+        _ => (l + (mw - px_w) / 2, t, Anchor::default()),
+    }
+}
+
+/// Settings → Display "Move the notch": asks the notch (on its next frame) to close and wait to be dragged.
+static MOVE_REQUEST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn request_move() {
+    MOVE_REQUEST.store(true, std::sync::atomic::Ordering::Relaxed);
+    crate::bg::refresh();
+}
+
+/// Move mode gives up after this long without a drag.
+const MOVE_SECS: f32 = 30.0;
 
 impl Notch {
     pub fn new(gfx: Gfx, win_x: i32, win_y: i32) -> Result<Self> {
@@ -446,11 +592,15 @@ impl Notch {
             tab_hits: Vec::new(),
             pin_hit: Rect::default(),
             panel: (0.0, 0.0, 1.0),
+            anchor: Anchor::default(),
+            moving: None,
+            drag: None,
         })
     }
 
     fn capsule_style(&self) -> bool {
-        settings::shared().notch_style == "Capsule"
+        // Away from the top edge (or being moved) the notch can't hang from it: it floats.
+        settings::shared().notch_style == "Capsule" || self.anchor.floating || self.moving.is_some()
     }
 
     pub fn animating(&self) -> bool {
@@ -545,6 +695,12 @@ impl Notch {
     /// Width/height of the closed notch for what's going on (music, timer, idle).
     fn resize_closed(&mut self) {
         let (w, h) = idle_size();
+        if self.moving.is_some() {
+            let hint = self.gfx.measure(tr("Drag me anywhere"), idle_font(h), SEMIBOLD);
+            self.width.target = (hint + 64.0).ceil().max(w);
+            self.height.target = h;
+            return;
+        }
         let wide = match model::activity() {
             model::Activity::Music => {
                 let text = music_text();
@@ -710,7 +866,7 @@ impl Notch {
     pub fn dodge(&mut self, x: f32, y: f32) {
         const GAP: f32 = 28.0;
         const BAND: f32 = 24.0;
-        if self.expanded || self.alert.is_some() || !settings::shared().repel_cursor {
+        if self.expanded || self.alert.is_some() || !settings::shared().repel_cursor || self.anchor != Anchor::default() || self.moving.is_some() {
             self.dodging = None;
             self.shove.target = 0.0;
             return;
@@ -747,10 +903,37 @@ impl Notch {
         }
     }
 
+    pub fn dragging(&self) -> bool {
+        self.drag.is_some()
+    }
+
+    /// Leaves move mode (dropped, cancelled or timed out).
+    pub fn end_move(&mut self) {
+        self.moving = None;
+        self.drag = None;
+        self.resize_closed();
+        self.busy = true;
+    }
+
+    /// The closed notch's centre and top on the screen (px): where a drag catches it.
+    pub fn screen_anchor(&self) -> (f64, f64) {
+        let (o, _) = self.outline();
+        let s = self.gfx.scale as f64;
+        (self.win_x as f64 + (o.x + o.w / 2.0) as f64 * s, self.win_y as f64 + self.anchor.y as f64 * s)
+    }
+
+    /// The pointer on the canvas (DIP), wherever it is on the screen.
+    fn cursor_canvas(&self) -> Option<(f32, f32)> {
+        let mut p = windows::Win32::Foundation::POINT::default();
+        unsafe { windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut p).ok()? };
+        let s = self.gfx.scale;
+        Some(((p.x - self.win_x - self.shove_px()) as f32 / s, (p.y - self.win_y) as f32 / s))
+    }
+
     /// A moment of the cat looking around (Settings → Display "Idle eyes").
     pub fn show_eyes(&mut self) {
         let s = settings::shared();
-        if self.expanded || self.alert.is_some() || model::activity() != model::Activity::Idle || !s.idle_eyes {
+        if self.expanded || self.alert.is_some() || model::activity() != model::Activity::Idle || !s.idle_eyes || self.moving.is_some() {
             return;
         }
         // Hidden notch: the eyes peek out only if Settings → "Eyes while hidden" is on.
@@ -758,7 +941,7 @@ impl Notch {
             return;
         }
         // Take turns through the animations (dev: FATHNOTCH_EYES_KIND picks one).
-        self.eyes_kind = match std::env::var("FATHNOTCH_EYES_KIND").ok().and_then(|v| v.parse().ok()) {
+        self.eyes_kind = match std::env::var("FATHNOTCH_EYES_KIND").ok().and_then(|v| v.parse().ok()).or_else(|| eye_anim(&s.eyes_anim)) {
             Some(k) => k,
             None => (self.eyes_kind + 1) % EYE_KINDS,
         };
@@ -801,7 +984,9 @@ impl Notch {
     /// The notch's bounds in canvas DIP (for hover checks).
     pub fn bounds(&self) -> Rect {
         let (o, _) = self.outline();
-        Rect::new(o.x - o.ear, 0.0, o.w + 2.0 * o.ear, o.y + o.h)
+        // Hanging from the top edge: the strip above a capsule counts too (as it always has).
+        let top = if self.anchor.floating { o.y } else { 0.0 };
+        Rect::new(o.x - o.ear, top, o.w + 2.0 * o.ear, o.y + o.h - top)
     }
 
     fn progress(&self) -> (f32, f32) {
@@ -832,8 +1017,20 @@ impl Notch {
         let drop = if cap { GAP } else { GAP * peek };
         let w = self.width.value.max(60.0);
         let h = self.height.value.max(20.0);
-        let x = CANVAS_W / 2.0 - w / 2.0;
-        (Outline { x, y: drop, w, h, ear, radius, top_radius }, (p, peek))
+        // Closed: where Settings → Display "Position" puts it. Opening: towards the canvas's middle (the
+        // panel is as wide as the canvas allows), and down from the notch as far as there's room.
+        let a = self.anchor;
+        let closed_x = match a.side {
+            Side::Left => a.x,
+            Side::Right => a.x - w,
+            Side::Center => a.x - w / 2.0,
+        };
+        let open_x = CANVAS_W / 2.0 - w / 2.0;
+        let pad = ear + 4.0;
+        let x = (closed_x + (open_x - closed_x) * p).clamp(pad, (CANVAS_W - w - pad).max(pad));
+        let open_y = a.y.min((CANVAS_H - h - drop - 4.0).max(0.0));
+        let y = drop + a.y + (open_y - a.y) * p;
+        (Outline { x, y, w, h, ear, radius, top_radius }, (p, peek))
     }
 
     /// Pointer position (canvas DIP) → panel coordinates.
@@ -862,6 +1059,16 @@ impl Notch {
     }
 
     pub fn render(&mut self, hwnd: HWND) -> Result<()> {
+        // Settings → Display "Move the notch": close, and wait for a drag (for a while).
+        if MOVE_REQUEST.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            self.pinned = false;
+            self.collapse();
+            self.moving = Some(Instant::now());
+            self.resize_closed();
+        }
+        if self.moving.is_some_and(|t| t.elapsed().as_secs_f32() > MOVE_SECS) && !self.dragging() {
+            self.end_move();
+        }
         let mut theme = theme();
         let (o, (p, peek)) = self.outline();
         self.busy = false;
@@ -869,7 +1076,7 @@ impl Notch {
         // Concealed: fade the closed pill out entirely (transparent pixels let clicks through).
         // The peeking eyes fade a hidden notch in for their few seconds, then it fades away again.
         let eyes_out = self.eyes.is_some_and(|s| s.elapsed().as_secs_f32() < EYES_SECS);
-        self.conceal.target = if self.concealed && !self.expanded && self.alert.is_none() && !eyes_out { 0.0 } else { 1.0 };
+        self.conceal.target = if self.concealed && !self.expanded && self.alert.is_none() && !eyes_out && self.moving.is_none() { 0.0 } else { 1.0 };
         // Teleprompter: Settings → its opacity slider makes the panel see-through while it's open (as C#).
         if self.expanded && self.tool == "teleprompter" {
             theme.pill.a *= settings::shared().prompter_opacity.clamp(0.2, 1.0) as f32;
@@ -902,7 +1109,10 @@ impl Notch {
             }
             let geo = o.build(&g.factory)?;
             g.fill_geometry(&geo.clone().into(), theme.pill);
-            if settings::shared().notch_border {
+            if self.moving.is_some() {
+                // Move mode: an accent outline says "pick me up".
+                g.stroke_geometry(&geo.into(), theme.accent, 1.5);
+            } else if settings::shared().notch_border {
                 g.stroke_geometry(&geo.into(), theme.stroke, 1.0);
             }
             g.push_clip(Rect::new(o.x, o.y, o.w, o.h).d2d());
@@ -938,6 +1148,11 @@ impl Notch {
         let (_, idle_h) = idle_size();
         let r = Rect::new(o.x, o.y, o.w, idle_h.min(o.h));
         let fs = idle_font(idle_h);
+        if self.moving.is_some() {
+            g.icon("ArrowsMove", r.x + 16.0, r.cy() - 8.0, 16.0, with_alpha(t.accent, a));
+            g.text(tr("Drag me anywhere"), fs, SEMIBOLD, Rect::new(r.x + 40.0, r.y, r.w - 52.0, r.h).d2d(), Align::Left, with_alpha(t.text, a));
+            return;
+        }
         match model::activity() {
             model::Activity::Music => {
                 if let Some(np) = model::now_playing() {
@@ -1012,7 +1227,13 @@ impl Notch {
                 if let Some(start) = self.eyes {
                     let el = start.elapsed().as_secs_f32();
                     if el < EYES_SECS {
-                        draw_eyes(g, &r, el, a, t, self.eyes_kind);
+                        // Settings → Display "Follow the pointer": the pupils look where it is.
+                        let look = if settings::shared().eyes_follow {
+                            self.cursor_canvas().map(|(x, y)| (((x - r.cx()) / 160.0).clamp(-1.0, 1.0), ((y - r.cy()) / 90.0).clamp(-1.0, 1.0)))
+                        } else {
+                            None
+                        };
+                        draw_eyes(g, &r, el, a, t, self.eyes_kind, look);
                         self.busy = true;
                         return;
                     }
@@ -1316,5 +1537,66 @@ impl Notch {
         }
         self.gfx.set_base(1.0, 0.0, 0.0);
         let _ = (LIGHT, color(0, 0.0));
+    }
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::*;
+
+    // A 1920×1080 monitor at 100 %, and a canvas as wide/tall as the real one.
+    const M: (i32, i32, i32, i32) = (0, 0, 1920, 1080);
+    fn canvas() -> (i32, i32) {
+        (CANVAS_W.ceil() as i32, CANVAS_H.ceil() as i32)
+    }
+
+    #[test]
+    fn centre_and_corners() {
+        let (w, h) = canvas();
+        let (x, y, a) = position(M, 1.0, w, h, "center", 0.0, 0.0, 36.0);
+        assert_eq!((x, y), ((1920 - w) / 2, 0));
+        assert_eq!(a, Anchor::default());
+
+        let (x, _, a) = position(M, 1.0, w, h, "left", 0.0, 0.0, 36.0);
+        assert_eq!(x, 0, "the canvas starts at the monitor's left edge");
+        assert_eq!(a.side, Side::Left);
+        assert!(a.x > EAR_OPEN, "the ear stays on screen");
+
+        let (x, _, a) = position(M, 1.0, w, h, "right", 0.0, 0.0, 36.0);
+        assert_eq!(x + w, 1920, "the canvas ends at the monitor's right edge");
+        assert_eq!(a.side, Side::Right);
+    }
+
+    #[test]
+    fn free_spot_keeps_the_panel_on_screen() {
+        let (w, h) = canvas();
+        // Bottom-left corner: the canvas is pulled back onto the monitor; the notch keeps its spot inside it.
+        let (x, y, a) = position(M, 1.0, w, h, "free", 0.05, 0.95, 36.0);
+        assert_eq!(x, 0);
+        assert_eq!(y, 1080 - h);
+        let notch_cx = x as f32 + a.x;
+        assert!((notch_cx - 96.0).abs() < 1.0, "centre at 5 % of the width, got {notch_cx}");
+        let notch_bottom = y as f32 + a.y + 36.0 + GAP;
+        assert!(notch_bottom <= 1080.0, "the notch stays above the bottom edge ({notch_bottom})");
+        assert!(a.floating);
+        // Mid-screen with room below: the window starts at the notch (y 0 inside it), and it still floats.
+        let (_, y, a) = position(M, 1.0, w, h, "free", 0.3, 0.4, 36.0);
+        assert_eq!((y, a.y), (432, 0.0));
+        assert!(a.floating, "not at the monitor's top edge");
+        // A free spot at the very top hangs from the edge again.
+        let (_, y, a) = position(M, 1.0, w, h, "free", 0.5, 0.0, 36.0);
+        assert_eq!((y, a.y), (0, 0.0));
+        assert!(!a.floating);
+    }
+
+    #[test]
+    fn scaled_monitor_on_the_right() {
+        // 150 %, a second monitor to the right of the first.
+        let m = (1920, 0, 1920 + 2560, 1440);
+        let (w, h) = ((CANVAS_W * 1.5).ceil() as i32, (CANVAS_H * 1.5).ceil() as i32);
+        let (x, y, a) = position(m, 1.5, w, h, "free", 0.5, 0.5, 36.0);
+        assert!(x >= 1920 && x + w <= 1920 + 2560);
+        assert!(y >= 0 && y + h <= 1440);
+        assert!((x as f32 + a.x * 1.5 - (1920.0 + 1280.0)).abs() < 2.0, "centred on the monitor");
     }
 }

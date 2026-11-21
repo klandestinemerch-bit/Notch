@@ -127,6 +127,9 @@ thread_local! {
     static WANT_CONCEAL: RefCell<bool> = const { RefCell::new(false) };
     static LAST_TRACK: RefCell<String> = const { RefCell::new(String::new()) };
     static MONITOR: RefCell<isize> = const { RefCell::new(0) };
+    /// Dragging the notch (Settings → Display "Move the notch"): where it would land, as fractions of the
+    /// monitor (saved on release).
+    static DRAG_POS: RefCell<Option<(f64, f64)>> = const { RefCell::new(None) };
 }
 
 /// The foreground app's exe name ("chrome.exe"), lower case.
@@ -211,7 +214,10 @@ fn poll_edge(hwnd: HWND) {
         let (x, y) = cursor_dip(n)?;
         let b = n.bounds();
         let over_x = x >= b.x - 40.0 && x <= b.right() + 40.0;
-        Some((over_x && y <= 3.0, over_x && y <= b.bottom() + 24.0))
+        // Hanging from the top edge: touching the edge above it. Floating: its spot.
+        let at_top = !n.anchor.floating;
+        let near_edge = over_x && if at_top { y <= 3.0 } else { y >= b.y - 6.0 && y <= b.bottom() + 6.0 };
+        Some((near_edge, over_x && y >= b.y - 24.0 && y <= b.bottom() + 24.0))
     })
     .flatten() else {
         return;
@@ -268,12 +274,66 @@ fn place(hwnd: HWND) {
                     n.gfx = g;
                 }
             }
-            let m = info.rcMonitor;
-            n.win_x = m.left + ((m.right - m.left) - n.gfx.px_w) / 2;
-            n.win_y = m.top;
+            let s = settings::get();
+            apply_position(n, info.rcMonitor, &s.notch_position, s.notch_free_x, s.notch_free_y);
         });
         redraw(hwnd);
     }
+}
+
+/// Puts the window and the closed notch where Settings → Display "Position" says, on monitor `m`.
+fn apply_position(n: &mut Notch, m: RECT, pos: &str, fx: f64, fy: f64) {
+    let (x, y, anchor) = notch::position((m.left, m.top, m.right, m.bottom), n.gfx.scale, n.gfx.px_w, n.gfx.px_h, pos, fx, fy, notch::idle_height());
+    n.win_x = x;
+    n.win_y = y;
+    n.anchor = anchor;
+}
+
+fn monitor_rect() -> RECT {
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    unsafe {
+        let _ = GetMonitorInfoW(target_monitor(), &mut info);
+    }
+    info.rcMonitor
+}
+
+/// Dragging the notch: its centre and top follow the pointer (kept on the monitor; near the top edge it
+/// snaps to it and hangs from it again).
+fn drag_notch(hwnd: HWND) {
+    let mut cur = POINT::default();
+    unsafe {
+        let _ = GetCursorPos(&mut cur);
+    }
+    let m = monitor_rect();
+    with(|n| {
+        let Some((ox, oy)) = n.drag else { return };
+        let s = n.gfx.scale as f64;
+        let (mw, mh) = ((m.right - m.left).max(1) as f64, (m.bottom - m.top).max(1) as f64);
+        let half = n.width_now() as f64 * s / 2.0;
+        let cx = (cur.x as f64 - ox).clamp(m.left as f64 + half + 4.0, (m.right as f64 - half - 4.0).max(m.left as f64 + half + 4.0));
+        let mut top = (cur.y as f64 - oy).max(m.top as f64);
+        if top - (m.top as f64) < 16.0 * s {
+            top = m.top as f64;
+        }
+        let (fx, fy) = ((cx - m.left as f64) / mw, (top - m.top as f64) / mh);
+        apply_position(n, m, "free", fx, fy);
+        DRAG_POS.with(|d| *d.borrow_mut() = Some((fx, fy)));
+    });
+    redraw(hwnd);
+}
+
+/// The drag ended: keep the notch there.
+fn drop_notch(hwnd: HWND) {
+    let pos = DRAG_POS.with(|d| d.borrow_mut().take());
+    with(|n| n.end_move());
+    if let Some((fx, fy)) = pos {
+        settings::update(|x| {
+            x.notch_position = "free".into();
+            x.notch_free_x = fx;
+            x.notch_free_y = fy;
+        });
+    }
+    redraw(hwnd);
 }
 
 /// Settings → Music "Announce new songs": a short alert when the track changes.
@@ -614,6 +674,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     unsafe {
         match msg {
             WM_MOUSEMOVE => {
+                if with(|n| n.dragging()).unwrap_or(false) {
+                    drag_notch(hwnd);
+                    return LRESULT(0);
+                }
                 let first = HOVER.with(|h| !std::mem::replace(&mut *h.borrow_mut(), true));
                 if first {
                     let mut tme = TRACKMOUSEEVENT {
@@ -650,6 +714,24 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             }
             WM_LBUTTONDOWN | WM_RBUTTONDOWN => {
                 let expanded = with(|n| n.expanded()).unwrap_or(false);
+                // Move mode: the left button catches the notch, the right one gives up.
+                if !expanded && with(|n| n.moving.is_some()).unwrap_or(false) {
+                    if msg == WM_LBUTTONDOWN {
+                        let mut cur = POINT::default();
+                        let _ = GetCursorPos(&mut cur);
+                        with(|n| {
+                            let (cx, top) = n.screen_anchor();
+                            n.drag = Some((cur.x as f64 - cx, cur.y as f64 - top));
+                        });
+                        SetCapture(hwnd);
+                    } else {
+                        with(|n| n.end_move());
+                        MONITOR.with(|m| *m.borrow_mut() = 0);
+                        place(hwnd);
+                    }
+                    redraw(hwnd);
+                    return LRESULT(0);
+                }
                 if !expanded {
                     // Closed: a click on an alert opens its tool (or dismisses it); else opens the panel.
                     let (dismiss, open) = with(|n| {
@@ -701,6 +783,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             // Lost the mouse (another window took it): the button counts as released, or a held slider
             // would keep going after the button is up.
             WM_CAPTURECHANGED => {
+                if with(|n| n.dragging()).unwrap_or(false) {
+                    drop_notch(hwnd);
+                    return LRESULT(0);
+                }
                 with(|n| {
                     if n.input.down {
                         n.input.down = false;
@@ -711,6 +797,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 LRESULT(0)
             }
             WM_LBUTTONUP => {
+                if with(|n| n.dragging()).unwrap_or(false) {
+                    // drop_notch first: releasing capture sends WM_CAPTURECHANGED, which would drop it too.
+                    drop_notch(hwnd);
+                    let _ = ReleaseCapture();
+                    return LRESULT(0);
+                }
                 let _ = ReleaseCapture();
                 with(|n| {
                     set_mouse(n, lparam);
@@ -779,7 +871,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                         let _ = KillTimer(hwnd, TIMER_HOVER);
                         if cursor_in_notch() {
                             with(|n| {
-                                if !n.has_alert() {
+                                if !n.has_alert() && n.moving.is_none() {
                                     n.expand();
                                 }
                             });
@@ -841,7 +933,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                             place(hwnd);
                         }
                         let open = with(|n| n.expanded()).unwrap_or(false);
-                        if open || model::activity() != model::Activity::Idle {
+                        let moving = with(|n| n.moving.is_some()).unwrap_or(false);
+                        if open || moving || model::activity() != model::Activity::Idle {
                             redraw(hwnd);
                         }
                     }

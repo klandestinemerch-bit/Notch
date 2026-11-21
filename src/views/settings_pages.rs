@@ -313,11 +313,21 @@ pub fn display(p: &mut Pg) {
     let labels: Vec<&str> = names.iter().map(String::as_str).collect();
     let mut values = vec![-1, -2];
     values.extend(0..screens.len() as i32);
+    let move_w = p.button_w("Move…");
     let rr = p.card(
         Some(tr("LOCATION")),
-        &[R::c(tr("Show notch on"), tr("Which monitor hosts the notch. Follow the pointer moves it to whichever display you're using."), 210.0)],
+        &[
+            R::c(tr("Show notch on"), tr("Which monitor hosts the notch. Follow the pointer moves it to whichever display you're using."), 210.0),
+            R::c("Position", "Along the top edge (centre or a corner), or anywhere you drag it. The panel opens next to it.", 190.0),
+            R::c("Move the notch", "Closes the panel: drag the notch where you want it and let go. Right-click to cancel.", move_w),
+        ],
     );
     p.pick(rr[0], "set.monitor", &labels, &values, &s.monitor_index, 0, |x, v| x.monitor_index = v);
+    let places = ["center".to_string(), "left".into(), "right".into(), "free".into()];
+    p.pick(rr[1], "set.position", &["Top centre", "Top left", "Top right", "Free (drag it)"], &places, &s.notch_position, 0, |x, v| x.notch_position = v);
+    if p.button(rr[2], "Move…", false) {
+        crate::notch::request_move();
+    }
 
     let rr = p.card(
         Some(tr("STYLE")),
@@ -375,6 +385,8 @@ pub fn display(p: &mut Pg) {
         x.idle_eyes_every_sec = v
     });
     p.tog(rr[4], s.eyes_when_hidden, |x, v| x.eyes_when_hidden = v);
+
+    eyes(p, &s);
 
     let rows: Vec<R> = IDLE_ITEMS.iter().map(|(_, name, desc)| R::t(*name, *desc)).collect();
     let rr = p.card(Some(tr("SHOW WHEN IDLE")), &rows);
@@ -1108,6 +1120,52 @@ fn adzan(p: &mut Pg, s: &settings::Settings) {
     if s.adzan_enabled && s.adzan_file.trim().is_empty() {
         p.hint("Choose an adzan file above; until then the prayer sound plays.", true);
     }
+}
+
+/// Display → Eyes: the peeking eyes' shape, colour and animation, following the pointer, and a preview.
+fn eyes(p: &mut Pg, s: &settings::Settings) {
+    let rr = p.card(
+        Some("EYES"),
+        &[
+            R::new("Preview", "How the eyes look in the notch.", 150.0, 34.0),
+            R::c("Eye shape", "Cat eyes, round eyes with a shine, robot panels, or two simple dots.", 150.0),
+            R::c("Eye colour", "Theme follows the colour scheme (white on the dark notch).", 150.0),
+            R::c("Animation", "Take turns through all of them, or always the same one.", 150.0),
+            R::t("Look at the pointer", "The pupils follow the mouse pointer while the eyes are out."),
+        ],
+    );
+    if let Some(r) = rr[0] {
+        // The notch in small, with the eyes looping through their animation(s).
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let t = p.ui.t;
+        let pill = Rect::new(r.x, r.cy() - 17.0, r.w, 34.0);
+        p.ui.g.fill_round(pill.d2d(), 17.0, p.ui.c(t.pill));
+        p.ui.g.stroke_round(pill.inset(0.5, 0.5).d2d(), 16.5, p.ui.c(t.stroke), 1.0);
+        let loop_s = crate::notch::EYES_LOOP_SECS;
+        let el = START.get_or_init(std::time::Instant::now).elapsed().as_secs_f32();
+        let kind = match s.eyes_anim.as_str() {
+            "look" => 0,
+            "sleepy" => 1,
+            "wink" => 2,
+            "curious" => 3,
+            _ => (el / loop_s) as u8 % 4,
+        };
+        let look = if s.eyes_follow {
+            let (mx, my) = p.ui.input.mouse;
+            (!mx.is_nan()).then(|| (((mx - pill.cx()) / 160.0).clamp(-1.0, 1.0), ((my - pill.cy()) / 90.0).clamp(-1.0, 1.0)))
+        } else {
+            None
+        };
+        crate::notch::draw_eyes(p.ui.g, &pill, el % loop_s, p.ui.alpha, &t, kind, look);
+        p.ui.animate = true;
+    }
+    let shapes = ["cat".to_string(), "round".into(), "robot".into(), "dots".into()];
+    p.pick(rr[1], "set.eyeshape", &["Cat", "Round", "Robot", "Dots"], &shapes, &s.eyes_style, 0, |x, v| x.eyes_style = v);
+    let colours = ["theme".to_string(), "accent".into(), "yellow".into(), "green".into(), "blue".into(), "pink".into()];
+    p.pick(rr[2], "set.eyecolor", &["Theme", "Accent", "Yellow", "Green", "Blue", "Pink"], &colours, &s.eyes_color, 0, |x, v| x.eyes_color = v);
+    let anims = ["mix".to_string(), "look".into(), "sleepy".into(), "wink".into(), "curious".into()];
+    p.pick(rr[3], "set.eyeanim", &["Take turns", "Look around", "Sleepy", "Wink", "Curious"], &anims, &s.eyes_anim, 0, |x, v| x.eyes_anim = v);
+    p.tog(rr[4], s.eyes_follow, |x, v| x.eyes_follow = v);
 }
 
 // ---------------------------------------------------------------- Weather

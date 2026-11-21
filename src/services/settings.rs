@@ -131,8 +131,21 @@ pub struct Settings {
     pub idle_eyes_every_sec: i32,
     /// The peeking eyes also come out (for their few seconds) while the notch is hidden.
     pub eyes_when_hidden: bool,
+    /// The idle eyes' look: "cat", "round", "robot" or "dots".
+    pub eyes_style: String,
+    /// Their colour: "theme" (the scheme's text colour), "accent", "yellow", "green", "blue" or "pink".
+    pub eyes_color: String,
+    /// "mix" takes turns through the animations; "look", "sleepy", "wink" or "curious" plays just that one.
+    pub eyes_anim: String,
+    /// The pupils follow the mouse pointer while the eyes are out.
+    pub eyes_follow: bool,
     /// "Notch" | "Capsule"
     pub notch_style: String,
+    /// Where the notch sits on its monitor: "center", "left" or "right" (along the top edge), or "free"
+    /// (dragged there; `notch_free_x` is its centre, `notch_free_y` its top, as fractions of the monitor).
+    pub notch_position: String,
+    pub notch_free_x: f64,
+    pub notch_free_y: f64,
     /// 0.8 compact … 1.0 full size.
     pub panel_scale: f64,
     pub lyrics_in_notch: bool,
@@ -270,7 +283,14 @@ impl Default for Settings {
             idle_eyes: true,
             idle_eyes_every_sec: 45,
             eyes_when_hidden: false,
+            eyes_style: s("cat"),
+            eyes_color: s("theme"),
+            eyes_anim: s("mix"),
+            eyes_follow: false,
             notch_style: s("Notch"),
+            notch_position: s("center"),
+            notch_free_x: 0.5,
+            notch_free_y: 0.0,
             panel_scale: 0.8,
             lyrics_in_notch: true,
             prayer_enabled: true,
